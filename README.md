@@ -426,6 +426,7 @@ measurements and rationale: [`CHANGELOG.md`](CHANGELOG.md); authorship: [`CREDIT
 | `0041` | SvangenStudios | -- (tests only) | The two opt-in grammar tests use the current `HfText` API, so the server tests compile again |
 | `0042` | SvangenStudios | -- (on) | A JSON answer (`response_format`, `guided_json`) stays content when `tools` are offered; it is not parsed as tool calls |
 | `0043` | SvangenStudios | -- (on) | A reply made only of orphan DSML closing tags gets `tensorfold.tool_parse_warning` (diagnostic only; [#14](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/14)) |
+| `0037` | shalk3 | `TF_DS_LOAD_PREFETCH` (on) | The weight loader's file is read ahead by 8 threads (32 MiB chunks, at most 4 GiB past the loader), so its reads come from the page cache: a node's load 83 s -> 27 s from NVMe; the weights are unchanged |
 
 ### Idle RDMA CPU use
 
