@@ -423,6 +423,7 @@ measurements and rationale: [`CHANGELOG.md`](CHANGELOG.md); authorship: [`CREDIT
 | `0036` | BobClawblaw, Ash Hart, bertholomus (ported by Mia's AI Lab) | -- (on) | Structured output and `tool_choice` required on the DeepSeek-V4.1 engine ([above](#structured-output-and-required-tool-calls); [#6](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/6))
 | `0039` | SvangenStudios | -- (on) | A reply grammar that cannot be built at admission fails only its own request; setup no longer reports success for a freed job |
 | `0040` | SvangenStudios | -- (on) | Decode and drafter graph caches keep ownership of an executable whose first launch fails, so a destroyed handle is never launched or destroyed twice |
+| `0041` | SvangenStudios | -- (tests only) | The two opt-in grammar tests use the current `HfText` API, so the server tests compile again |
 
 ### Idle RDMA CPU use
 
