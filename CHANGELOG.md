@@ -58,6 +58,11 @@ The recipe itself is unchanged.
   structured and tool-call checks failed before (the JSON came back as `tool_calls`, whole replies with
   `content: null`) and 25 of 25 pass with it; ordinary tool calls, `required`/named and the 400 for schema +
   `required` are unchanged. CPU: 132 of 132 JSON answers preserved over 288 handler observations.
+- **2026-10-29** -- `0043` (SvangenStudios): a reply made only of DSML closing tags (the form reported in #14), with
+  tools offered, gets `tensorfold.tool_parse_warning: "orphan_dsml_closers"` (whole replies and the final SSE event)
+  and a log line with the request id. Diagnostic only: content, token IDs, usage and finish reason are unchanged, no
+  call is invented and no retry started. It does not fix #14. CPU: 42 exact warning cases and ten negatives; live:
+  no warning on 25 ordinary, JSON and tool-call replies.
 - **2026-10-28** -- `0036`, structured output and required tool calls
   ([#6](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/6)): upstream TensorFold's
   structured output (BobClawblaw's lane-core grammar and libtfgrammar, Ash Hart's required tool calls and grammar-aware

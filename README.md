@@ -425,6 +425,7 @@ measurements and rationale: [`CHANGELOG.md`](CHANGELOG.md); authorship: [`CREDIT
 | `0040` | SvangenStudios | -- (on) | Decode and drafter graph caches keep ownership of an executable whose first launch fails, so a destroyed handle is never launched or destroyed twice |
 | `0041` | SvangenStudios | -- (tests only) | The two opt-in grammar tests use the current `HfText` API, so the server tests compile again |
 | `0042` | SvangenStudios | -- (on) | A JSON answer (`response_format`, `guided_json`) stays content when `tools` are offered; it is not parsed as tool calls |
+| `0043` | SvangenStudios | -- (on) | A reply made only of orphan DSML closing tags gets `tensorfold.tool_parse_warning` (diagnostic only; [#14](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/14)) |
 
 ### Idle RDMA CPU use
 
