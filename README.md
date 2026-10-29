@@ -424,6 +424,7 @@ measurements and rationale: [`CHANGELOG.md`](CHANGELOG.md); authorship: [`CREDIT
 | `0039` | SvangenStudios | -- (on) | A reply grammar that cannot be built at admission fails only its own request; setup no longer reports success for a freed job |
 | `0040` | SvangenStudios | -- (on) | Decode and drafter graph caches keep ownership of an executable whose first launch fails, so a destroyed handle is never launched or destroyed twice |
 | `0041` | SvangenStudios | -- (tests only) | The two opt-in grammar tests use the current `HfText` API, so the server tests compile again |
+| `0042` | SvangenStudios | -- (on) | A JSON answer (`response_format`, `guided_json`) stays content when `tools` are offered; it is not parsed as tool calls |
 
 ### Idle RDMA CPU use
 

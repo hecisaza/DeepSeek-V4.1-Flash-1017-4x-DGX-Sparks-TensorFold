@@ -52,6 +52,12 @@ The recipe itself is unchanged.
   compile again: two opt-in tests in `tool_grammar.zig` still called `HfText.load` with the removed template argument
   and a removed `encodePlain` (also noted in #20). Test code only; no production code or tokenizer API changes. On
   CPU: compile error before, 70 passed and 2 skipped (the checkpoint tests) after.
+- **2026-10-29** -- `0042` (SvangenStudios): a JSON answer (`response_format` `json_object`/`json_schema`,
+  `guided_json`, the matching `structured_outputs` form) stays JSON when the request also offers `tools`: it is no
+  longer parsed as tool calls, hidden or Harmony-post-processed; the tools stay in the prompt. On this cluster 8 of 25
+  structured and tool-call checks failed before (the JSON came back as `tool_calls`, whole replies with
+  `content: null`) and 25 of 25 pass with it; ordinary tool calls, `required`/named and the 400 for schema +
+  `required` are unchanged. CPU: 132 of 132 JSON answers preserved over 288 handler observations.
 - **2026-10-28** -- `0036`, structured output and required tool calls
   ([#6](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/6)): upstream TensorFold's
   structured output (BobClawblaw's lane-core grammar and libtfgrammar, Ash Hart's required tool calls and grammar-aware
