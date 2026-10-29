@@ -67,6 +67,7 @@ BertholomusAI's DeepSeek-V4.1 part of it (bertholomus).** At a glance:
 | `0035` | Mia's AI Lab | rank 0's rendezvous ports open before its weights load, so a worker that loads first waits |
 | `0036` | BobClawblaw, [Ash Hart](https://github.com/ashhart), [bertholomus](https://github.com/bertholomus); ported by Mia's AI Lab | structured output and required tool calls (below) |
 | `0039` | [SvangenStudios](https://github.com/SvangenStudios) | a reply grammar that cannot start fails its request (no use of the freed job) |
+| `0040` | [SvangenStudios](https://github.com/SvangenStudios) | cached CUDA graph executables stay owned by their cache after a failed first launch |
 
 The per-patch notes below also credit everyone who helped find or shape a specific fix along the way -- Hector's
 reviewer, Codex and Grok's live-bug diagnosis and design reviews, an outside reviewer's observation -- without

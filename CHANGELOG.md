@@ -42,6 +42,12 @@ The recipe itself is unchanged.
   freed. CPU fault-injection and lifecycle tests: 24 of 24 with the patch, 12 fault paths failing without it; live on
   this cluster with `0040`-`0043` proposed alongside: `tools/validate.py` 8 of 8 equal, structured and tool-call
   replies unchanged. The failure path itself was not caused on the GPU.
+- **2026-10-29** -- `0040` (SvangenStudios): once a decode or drafter graph executable enters its cache, the cache
+  keeps ownership even when its first launch fails (the local `errdefer exec.deinit()` destroyed it and left it in
+  the map: a later hit launched a destroyed handle and teardown destroyed it twice). Capture agreement, cache
+  insertion and launch order are unchanged; no retry is added. CPU tests: 20 of 20 with the patch, 6 failing without
+  it; real-GPU cache probes on four GB10 and an A/B/A run through the full TP4 model (52 requests per phase,
+  identical token IDs). Recovery from a lost CUDA context is not claimed.
 - **2026-10-28** -- `0036`, structured output and required tool calls
   ([#6](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/6)): upstream TensorFold's
   structured output (BobClawblaw's lane-core grammar and libtfgrammar, Ash Hart's required tool calls and grammar-aware
