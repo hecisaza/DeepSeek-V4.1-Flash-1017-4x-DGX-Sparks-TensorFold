@@ -47,10 +47,8 @@ jobs:
        contains(fromJSON('["hecisaza"]'), github.event.pull_request.user.login))
     runs-on: [self-hosted, spark-lab]
     timeout-minutes: 240
-    concurrency:
-      # one run on the lab at a time; when called from spark-issue that run already holds the lab
-      group: ${{ inputs.called && format('spark-lab-in-{0}', github.run_id) || 'spark-lab' }}
-      cancel-in-progress: false
+    # no concurrency group: the one runner with the spark-lab label runs one job at a time, and GitHub keeps every job
+    # queued until it is free (a concurrency group keeps only one pending run and cancels the others)
     env:
       KIT: /root/inference-agent-kit
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

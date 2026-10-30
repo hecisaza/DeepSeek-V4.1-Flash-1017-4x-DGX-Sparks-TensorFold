@@ -5,6 +5,7 @@
 # Two ways in: the label `agent` on an issue of this repository, or "Run workflow" with an issue number here or the URL
 # of an issue anywhere (the fix is always pushed here).
 # The agent runs on the self-hosted runner with the kit's AGENTS.md contract and the task template; it holds no token.
+# Jobs are serialized by the runner itself (one job at a time), not by a concurrency group.
 name: spark-issue
 
 on:
@@ -21,10 +22,6 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
-
-concurrency:
-  group: spark-lab       # the agent uses the live build; the test that follows uses the whole lab
-  cancel-in-progress: false
 
 jobs:
   agent:
