@@ -1,0 +1,76 @@
+# spark-issue: an agent reproduces an issue against the lab's live build and, when the problem is real, fixes it on a
+# branch; scripts/issue-agent.sh of the inference-agent-kit confirms the reproduction, opens the pull request here, and
+# spark-test then tests that PR against its base (same run). When the problem does not show, the attempt is posted as a
+# comment on the issue when the issue is here, or kept as a draft in the run's artifacts when the issue is elsewhere.
+# Two ways in: the label `agent` on an issue of this repository, or "Run workflow" with an issue number here or the URL
+# of an issue anywhere (the fix is always pushed here).
+# The agent runs on the self-hosted runner with the kit's AGENTS.md contract and the task template; it holds no token.
+name: spark-issue
+
+on:
+  issues:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: "issue number in this repository, or the URL of an issue anywhere"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: spark-lab       # the agent uses the live build; the test that follows uses the whole lab
+  cancel-in-progress: false
+
+jobs:
+  agent:
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'agent'
+    runs-on: [self-hosted, spark-lab]
+    timeout-minutes: 240
+    outputs:
+      pr: ${{ steps.agent.outputs.pr }}
+    env:
+      KIT: /root/inference-agent-kit
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      LIVE_API: http://192.168.1.123:8888/v1
+      LIVE_MODEL: DeepSeek-V4.1-Flash-1017
+      ISSUE: ${{ inputs.issue || github.event.issue.number }}
+    steps:
+      - name: Upstream state (stage 0)
+        run: |
+          "$KIT/scripts/sync.sh" "${{ github.repository }}" | tee sync.txt
+
+      - name: The agent reproduces the issue and fixes it when it is real; the script confirms and opens the PR
+        id: agent
+        run: |
+          set +e
+          "$KIT/scripts/issue-agent.sh" "$ISSUE" --repo "${{ github.repository }}" --work "$RUNNER_TEMP/issues" 2>&1 | tee agent-run.txt
+          rc=${PIPESTATUS[0]}
+          R=$(grep -o 'RESULT: .*' agent-run.txt | tail -1)
+          echo "${R:-RESULT: no result line (exit $rc)}" >> "$GITHUB_STEP_SUMMARY"
+          case "$R" in "RESULT: pr "*) echo "pr=${R#RESULT: pr }" >> "$GITHUB_OUTPUT";; esac
+          exit "$rc"
+
+      - name: Keep the agent's notes (issue, task, REPRO.md, PR.md, logs)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue-agent-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/issues/**/*.md
+            ${{ runner.temp }}/issues/**/*.log
+            ${{ runner.temp }}/issues/**/*.txt
+          if-no-files-found: ignore
+
+  test:
+    needs: agent
+    if: needs.agent.outputs.pr != ''
+    uses: ./.github/workflows/spark-test.yml
+    with:
+      pr: ${{ needs.agent.outputs.pr }}
+      called: true
+    secrets: inherit

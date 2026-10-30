@@ -1,45 +1,86 @@
-# spark-test: test a labelled pull request on the lab's Sparks against its base (main without the PR), with the
-# inference-agent-kit. Both builds get the lab's local.sh without engine settings, so each runs with its own defaults.
-# Trial version: runs on a self-hosted runner that has ssh to the Sparks and the kit at /root/inference-agent-kit.
+# spark-test: test a pull request on the lab's Sparks against its base (main without the PR), with the inference-agent-kit.
+# Both builds get the lab's local.sh without engine settings, so each runs with its own defaults. Three ways in:
+#   - the label `test` on a PR of this repository (authors in the allowlist below)
+#   - "Run workflow" with a PR number here, or the URL of a PR anywhere (for example the upstream recipe)
+#   - called by spark-issue after its agent opened a PR
+# A PR that carries tests/repro-issue-N.sh also gets the repro suite: the script must show the problem on the base and
+# not on the PR. Evidence is committed to the PR branch and posted as a comment when the PR lives here; for a PR elsewhere
+# it goes to an evidence/ branch here and to the run summary, and nothing is posted on the other repository.
 name: spark-test
 
 on:
   pull_request_target:
     types: [labeled, synchronize]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: "PR number in this repository, or the URL of a PR anywhere"
+        required: true
+        type: string
+      suites:
+        description: "suites to run (default: the SUITES variable, else smoke,boundary,cutin,soak)"
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      pr:
+        required: true
+        type: string
+      suites:
+        required: false
+        type: string
+      called:
+        required: false
+        type: boolean
+        default: true
 
 permissions:
-  contents: write        # evidence commit on the PR branch
+  contents: write        # evidence commits
   pull-requests: write   # the automated comment
-
-concurrency:
-  group: spark-lab       # one run on the lab at a time
-  cancel-in-progress: false
 
 jobs:
   test:
-    # only labelled PRs from allowed authors run code on the lab
+    # a labelled PR runs only for allowed authors; a dispatch or a call was started by someone with write access
     if: >-
-      contains(github.event.pull_request.labels.*.name, 'test') &&
-      contains(fromJSON('["hecisaza"]'), github.event.pull_request.user.login)
+      github.event_name != 'pull_request_target' ||
+      (contains(github.event.pull_request.labels.*.name, 'test') &&
+       contains(fromJSON('["hecisaza"]'), github.event.pull_request.user.login))
     runs-on: [self-hosted, spark-lab]
-    timeout-minutes: 180
+    timeout-minutes: 240
+    concurrency:
+      # one run on the lab at a time; when called from spark-issue that run already holds the lab
+      group: ${{ inputs.called && format('spark-lab-in-{0}', github.run_id) || 'spark-lab' }}
+      cancel-in-progress: false
     env:
       KIT: /root/inference-agent-kit
-      PR: ${{ github.event.pull_request.number }}
-      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-      HEAD_REF: ${{ github.event.pull_request.head.ref }}
-      BASE_SHA: ${{ github.event.pull_request.base.sha }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      SUITES: ${{ vars.SUITES || 'smoke,boundary,cutin,soak' }}
+      THIS_REPO: ${{ github.repository }}
+      PR_INPUT: ${{ inputs.pr || github.event.pull_request.number }}
+      SUITES: ${{ inputs.suites || vars.SUITES || 'smoke,boundary,cutin,soak' }}
     steps:
-      - uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
+      - name: Resolve the pull request
+        run: |
+          if [[ "$PR_INPUT" =~ ^https://github\.com/([^/]+/[^/]+)/pull/([0-9]+) ]]; then PR_REPO=${BASH_REMATCH[1]}; PR=${BASH_REMATCH[2]}
+          else PR_REPO=$THIS_REPO; PR=$PR_INPUT; fi
+          { echo "PR_REPO=$PR_REPO"; echo "PR=$PR"
+            gh pr view "$PR" -R "$PR_REPO" --json headRefOid,baseRefOid,headRefName,baseRefName,isCrossRepository,url \
+              --jq '"HEAD_SHA=\(.headRefOid)\nBASE_SHA=\(.baseRefOid)\nHEAD_REF=\(.headRefName)\nBASE_REF=\(.baseRefName)\nPR_URL=\(.url)\nCROSS=\(.isCrossRepository)"'
+          } | tee -a "$GITHUB_ENV"
+          # evidence goes to the PR branch only when that branch lives in this repository
+          if [ "$PR_REPO" = "$THIS_REPO" ] && grep -q "^CROSS=false" "$GITHUB_ENV"; then echo "EVIDENCE_REF=$(grep ^HEAD_REF= "$GITHUB_ENV" | tail -1 | cut -d= -f2-)" >> "$GITHUB_ENV"
+          else echo "EVIDENCE_REF=evidence/$(tr / - <<<"$PR_REPO")-pr-$PR" >> "$GITHUB_ENV"; fi
+
+      - name: Checkout the PR head and its base
+        run: |
+          find . -mindepth 1 -delete; rm -rf ../base
+          git init -q . && git fetch -q "https://github.com/$PR_REPO.git" "refs/pull/$PR/head" "$BASE_SHA"
+          git checkout -q "$HEAD_SHA"
+          mkdir -p ../base && git archive "$BASE_SHA" | tar -x -C ../base
+          echo "PR $PR_URL: head ${HEAD_SHA::8} ($HEAD_REF), base ${BASE_SHA::8} ($BASE_REF)"
 
       - name: Upstream state (stage 0)
         run: |
-          "$KIT/scripts/sync.sh" "${{ github.repository }}" | tee sync.txt
+          "$KIT/scripts/sync.sh" "$THIS_REPO" | tee sync.txt
 
       - name: Build the PR and its base on the build host and ship both images to every Spark
         id: build
@@ -48,7 +89,6 @@ jobs:
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"; echo "BASE_IMAGE=$BASE_IMAGE" >> "$GITHUB_ENV"
           # the base (main without the PR) is the control; the lab's local.sh goes to both checkouts without its engine
           # settings (TF_* lines), so the PR's defaults and the base's defaults are what runs
-          rm -rf ../base && mkdir -p ../base && git archive "$BASE_SHA" | tar -x -C ../base
           ssh -o BatchMode=yes hisaza@192.168.1.123 "grep -vE '^[[:space:]]*(export[[:space:]]+)?TF_' ~/ds41-4x/scripts/local.sh" > local.lab.sh
           for pair in "./:ds41-pr" "../base/:ds41-base"; do
             src=${pair%%:*}; dir=${pair##*:}
@@ -63,14 +103,18 @@ jobs:
       - name: Test the PR against its base (stage 3)
         id: test
         run: |
-          "$KIT/scripts/pairtest" run --lab lab.run.yaml --target pr --compare base --suite "$SUITES" --runs runs
+          # a PR that fixes an issue carries its reproduction script: it runs against both builds as the repro suite
+          R=$(ls tests/repro-issue-*.sh 2>/dev/null | head -1); OPTS=(); S="$SUITES"
+          if [ -n "$R" ]; then OPTS=(--opt "repro_cmd=bash $R {api} {model}"); case ",$S," in *,repro,*) ;; *) S="$S,repro";; esac; fi
+          echo "SUITES_RUN=$S" >> "$GITHUB_ENV"
+          "$KIT/scripts/pairtest" run --lab lab.run.yaml --target pr --compare base --suite "$S" --runs runs "${OPTS[@]}"
 
       - name: Restore the live server (belt and braces)
         if: always()
         run: |
           "$KIT/scripts/pairtest" restore --lab lab.run.yaml
 
-      - name: Evidence to the PR branch
+      - name: Evidence to the PR branch (or an evidence/ branch here for a PR elsewhere)
         if: always()
         run: |
           RUN=$(ls -t runs 2>/dev/null | head -1); [ -n "$RUN" ] || exit 0
@@ -81,23 +125,39 @@ jobs:
           git config user.name "hecisaza"
           git config user.email "76170012+hecisaza@users.noreply.github.com"
           git add docs/evidence
-          git commit -m "evidence: $RUN (automated test run)" || exit 0
-          git push origin "HEAD:$HEAD_REF"
+          git commit -q -m "evidence: $RUN (automated test run of $PR_URL)" || exit 0
+          case "$EVIDENCE_REF" in evidence/*) FORCE=--force;; *) FORCE=;; esac
+          git push -q $FORCE "https://x-access-token:$GH_TOKEN@github.com/$THIS_REPO.git" "HEAD:refs/heads/$EVIDENCE_REF"
+          echo "evidence: https://github.com/$THIS_REPO/tree/$EVIDENCE_REF/docs/evidence/$RUN"
 
-      - name: Comment on the PR
+      - name: Comment on the PR (here), or write the comment to the run summary (a PR elsewhere)
         if: always()
         run: |
           [ -n "${RUN:-}" ] || RUN=$(ls -t runs 2>/dev/null | head -1)
           STATUS="${{ steps.test.outcome }}"
           [ "${{ steps.build.outcome }}" = failure ] && STATUS="build failed (nothing was tested)"
           {
-            echo "**Automated test run** on the lab's Sparks: \`${HEAD_SHA::8}\` against its base \`${BASE_SHA::8}\`, suites $SUITES: **$STATUS** (job [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}))"
+            echo "**Automated test run** on the lab's Sparks: $PR_URL, \`${HEAD_SHA::8}\` against its base \`${BASE_SHA::8}\`, suites ${SUITES_RUN:-$SUITES}: **$STATUS** (job [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}))"
             echo
             if [ -n "$RUN" ] && [ -f "runs/$RUN/report.md" ]; then sed -n '1,200p' "runs/$RUN/report.md"; else echo "_no report was produced; see the job log_"; fi
             echo
-            if [ -n "$RUN" ]; then echo "_Full evidence: \`docs/evidence/$RUN/\` on this branch (report.html, charts). Posted by the spark-test workflow._"; else echo "_Posted by the spark-test workflow._"; fi
+            if [ -n "$RUN" ]; then echo "_Full evidence: [docs/evidence/$RUN/](https://github.com/$THIS_REPO/tree/$EVIDENCE_REF/docs/evidence/$RUN) (report.html, charts). Posted by the spark-test workflow._"; else echo "_Posted by the spark-test workflow._"; fi
           } > comment.md
-          gh pr comment "$PR" --body-file comment.md
+          if [ "$PR_REPO" = "$THIS_REPO" ]; then gh pr comment "$PR" -R "$THIS_REPO" --body-file comment.md
+          else { echo "The PR is in $PR_REPO: nothing was posted there. The comment, ready to paste:"; echo; cat comment.md; } >> "$GITHUB_STEP_SUMMARY"; fi
+
+      - name: Keep the report and the comment as a run artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spark-test-${{ github.run_id }}
+          path: |
+            comment.md
+            runs/*/report.md
+            runs/*/report.html
+            runs/*/*.svg
+            runs/*/log.txt
+          if-no-files-found: ignore
 
       - name: Remove older PR and base images from the Sparks
         if: always()
