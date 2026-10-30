@@ -30,7 +30,7 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       SUITES: ${{ vars.SUITES || 'smoke,boundary,cutin' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
@@ -40,6 +40,7 @@ jobs:
           "$KIT/scripts/sync.sh" "${{ github.repository }}" | tee sync.txt
 
       - name: Build the PR image on the build host and ship it to every Spark
+        id: build
         run: |
           IMAGE="tensorfold-dsv41:pr-${HEAD_SHA::8}"
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
@@ -63,7 +64,7 @@ jobs:
       - name: Evidence to the PR branch
         if: always()
         run: |
-          RUN=$(ls -t runs | head -1); [ -n "$RUN" ] || exit 0
+          RUN=$(ls -t runs 2>/dev/null | head -1); [ -n "$RUN" ] || exit 0
           echo "RUN=$RUN" >> "$GITHUB_ENV"
           mkdir -p "docs/evidence/$RUN"
           cp "runs/$RUN/report.md" "runs/$RUN/report.html" "docs/evidence/$RUN/" 2>/dev/null || true
@@ -78,12 +79,14 @@ jobs:
         if: always()
         run: |
           [ -n "${RUN:-}" ] || RUN=$(ls -t runs 2>/dev/null | head -1)
+          STATUS="${{ steps.test.outcome }}"
+          [ "${{ steps.build.outcome }}" = failure ] && STATUS="build failed (nothing was tested)"
           {
-            echo "**Automated test run** \`$RUN\` on the lab's Sparks: **${{ steps.test.outcome }}** (job [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}))"
+            echo "**Automated test run** on the lab's Sparks for \`${HEAD_SHA::8}\`: **$STATUS** (job [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}))"
             echo
-            if [ -f "runs/$RUN/report.md" ]; then sed -n '1,120p' "runs/$RUN/report.md"; else echo "_no report was produced; see the job log_"; fi
+            if [ -n "$RUN" ] && [ -f "runs/$RUN/report.md" ]; then sed -n '1,120p' "runs/$RUN/report.md"; else echo "_no report was produced; see the job log_"; fi
             echo
-            echo "_Full evidence: \`docs/evidence/$RUN/\` on this branch (report.html, charts). Posted by the spark-test workflow._"
+            if [ -n "$RUN" ]; then echo "_Full evidence: \`docs/evidence/$RUN/\` on this branch (report.html, charts). Posted by the spark-test workflow._"; else echo "_Posted by the spark-test workflow._"; fi
           } > comment.md
           gh pr comment "$PR" --body-file comment.md
 
