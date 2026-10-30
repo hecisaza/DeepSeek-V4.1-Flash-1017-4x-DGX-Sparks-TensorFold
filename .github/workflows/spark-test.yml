@@ -21,12 +21,19 @@ on:
         description: "suites to run (default: the SUITES variable, else smoke,boundary,cutin,soak)"
         required: false
         type: string
+      reps:
+        description: "repetitions (default 1; 2 = counterbalanced PR/base then base/PR, twice the lab time)"
+        required: false
+        type: string
   workflow_call:
     inputs:
       pr:
         required: true
         type: string
       suites:
+        required: false
+        type: string
+      reps:
         required: false
         type: string
       called:
@@ -55,6 +62,7 @@ jobs:
       THIS_REPO: ${{ github.repository }}
       PR_INPUT: ${{ inputs.pr || github.event.pull_request.number }}
       SUITES: ${{ inputs.suites || vars.SUITES || 'smoke,boundary,cutin,soak' }}
+      REPS: ${{ inputs.reps || vars.REPS || '1' }}
     steps:
       - name: Resolve the pull request
         run: |
@@ -105,12 +113,20 @@ jobs:
           R=$(ls tests/repro-issue-*.sh 2>/dev/null | head -1); OPTS=(); S="$SUITES"
           if [ -n "$R" ]; then OPTS=(--opt "repro_cmd=bash $R {api} {model}"); case ",$S," in *,repro,*) ;; *) S="$S,repro";; esac; fi
           echo "SUITES_RUN=$S" >> "$GITHUB_ENV"
-          "$KIT/scripts/pairtest" run --lab lab.run.yaml --target pr --compare base --suite "$S" --runs runs "${OPTS[@]}"
+          "$KIT/scripts/pairtest" run --lab lab.run.yaml --target pr --compare base --suite "$S" --runs runs --opt "reps=$REPS" "${OPTS[@]}"
 
       - name: Restore the live server (belt and braces)
         if: always()
         run: |
           "$KIT/scripts/pairtest" restore --lab lab.run.yaml
+
+      - name: Second opinion on the evidence (a different model, read-only; never fails the run)
+        if: always() && steps.test.outcome != 'skipped'
+        timeout-minutes: 30
+        run: |
+          RUN=$(ls -t runs 2>/dev/null | head -1); [ -n "$RUN" ] || exit 0
+          gh pr view "$PR" -R "$PR_REPO" --json title,body --jq '"\(.title)\n\n\(.body)"' > pr.md || true
+          "$KIT/scripts/evidence-review.sh" "runs/$RUN" --checkout . --base "$BASE_SHA" --head "$HEAD_SHA" --pr-url "$PR_URL" --pr-file pr.md --timeout 25 || true
 
       - name: Evidence to the PR branch (or an evidence/ branch here for a PR elsewhere)
         if: always()
@@ -120,6 +136,7 @@ jobs:
           mkdir -p "docs/evidence/$RUN"
           cp "runs/$RUN/report.md" "runs/$RUN/report.html" "docs/evidence/$RUN/" 2>/dev/null || true
           cp runs/"$RUN"/*.svg "docs/evidence/$RUN/" 2>/dev/null || true
+          cp "runs/$RUN/REVIEW.md" "docs/evidence/$RUN/" 2>/dev/null || true
           git config user.name "hecisaza"
           git config user.email "76170012+hecisaza@users.noreply.github.com"
           git add docs/evidence
@@ -139,6 +156,11 @@ jobs:
             echo
             if [ -n "$RUN" ] && [ -f "runs/$RUN/report.md" ]; then sed -n '1,200p' "runs/$RUN/report.md"; else echo "_no report was produced; see the job log_"; fi
             echo
+            if [ -n "$RUN" ] && [ -s "runs/$RUN/REVIEW.md" ]; then
+              echo "### Second opinion (Codex, read-only, from the diff, the report and the raw results)"; echo; sed -n '1,120p' "runs/$RUN/REVIEW.md"; echo
+            elif [ -n "$RUN" ] && [ -s "runs/$RUN/review-missing.txt" ]; then
+              echo "_No second opinion this run: $(cat "runs/$RUN/review-missing.txt")_"; echo
+            fi
             if [ -n "$RUN" ]; then echo "_Full evidence: [docs/evidence/$RUN/](https://github.com/$THIS_REPO/tree/$EVIDENCE_REF/docs/evidence/$RUN) (report.html, charts). Posted by the spark-test workflow._"; else echo "_Posted by the spark-test workflow._"; fi
           } > comment.md
           if [ "$PR_REPO" = "$THIS_REPO" ]; then gh pr comment "$PR" -R "$THIS_REPO" --body-file comment.md
@@ -154,6 +176,8 @@ jobs:
             runs/*/report.md
             runs/*/report.html
             runs/*/*.svg
+            runs/*/REVIEW.md
+            runs/*/review-missing.txt
             runs/*/log.txt
           if-no-files-found: ignore
 
