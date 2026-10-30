@@ -1,4 +1,5 @@
-# spark-test: test a labelled pull request on the lab's Sparks against the live build, with the inference-agent-kit.
+# spark-test: test a labelled pull request on the lab's Sparks against its base (main without the PR), with the
+# inference-agent-kit. Both builds get the lab's local.sh without engine settings, so each runs with its own defaults.
 # Trial version: runs on a self-hosted runner that has ssh to the Sparks and the kit at /root/inference-agent-kit.
 name: spark-test
 
@@ -27,8 +28,9 @@ jobs:
       PR: ${{ github.event.pull_request.number }}
       HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       HEAD_REF: ${{ github.event.pull_request.head.ref }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      SUITES: ${{ vars.SUITES || 'smoke,boundary,cutin' }}
+      SUITES: ${{ vars.SUITES || 'smoke,boundary,cutin,soak' }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -39,22 +41,29 @@ jobs:
         run: |
           "$KIT/scripts/sync.sh" "${{ github.repository }}" | tee sync.txt
 
-      - name: Build the PR image on the build host and ship it to every Spark
+      - name: Build the PR and its base on the build host and ship both images to every Spark
         id: build
         run: |
-          IMAGE="tensorfold-dsv41:pr-${HEAD_SHA::8}"
-          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
-          # the PR checkout goes to the build host (image) and to the head (its scripts start the ranks, with the lab's local.sh)
-          rsync -a --delete --exclude .git ./ hisaza@192.168.1.161:ds41-pr/
-          rsync -a --delete --exclude .git ./ hisaza@192.168.1.123:ds41-pr/
-          ssh -o BatchMode=yes hisaza@192.168.1.123 'cp ~/ds41-4x/scripts/local.sh ~/ds41-pr/scripts/local.sh'
-          sed "s#__PR_IMAGE__#$IMAGE#" "$KIT/lab.pipeline.yaml" > lab.run.yaml
+          IMAGE="tensorfold-dsv41:pr-${HEAD_SHA::8}"; BASE_IMAGE="tensorfold-dsv41:base-${BASE_SHA::8}"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"; echo "BASE_IMAGE=$BASE_IMAGE" >> "$GITHUB_ENV"
+          # the base (main without the PR) is the control; the lab's local.sh goes to both checkouts without its engine
+          # settings (TF_* lines), so the PR's defaults and the base's defaults are what runs
+          rm -rf ../base && mkdir -p ../base && git archive "$BASE_SHA" | tar -x -C ../base
+          ssh -o BatchMode=yes hisaza@192.168.1.123 "grep -vE '^[[:space:]]*(export[[:space:]]+)?TF_' ~/ds41-4x/scripts/local.sh" > local.lab.sh
+          for pair in "./:ds41-pr" "../base/:ds41-base"; do
+            src=${pair%%:*}; dir=${pair##*:}
+            rsync -a --delete --exclude .git "$src" hisaza@192.168.1.161:$dir/
+            rsync -a --delete --exclude .git "$src" hisaza@192.168.1.123:$dir/
+            scp -q local.lab.sh hisaza@192.168.1.123:$dir/scripts/local.sh
+          done
+          sed "s#__PR_IMAGE__#$IMAGE#; s#__BASE_IMAGE__#$BASE_IMAGE#" "$KIT/lab.pipeline.yaml" > lab.run.yaml
+          "$KIT/scripts/pairtest" build --lab lab.run.yaml --target base
           "$KIT/scripts/pairtest" build --lab lab.run.yaml --target pr
 
-      - name: Test the PR against the live build (stage 3)
+      - name: Test the PR against its base (stage 3)
         id: test
         run: |
-          "$KIT/scripts/pairtest" run --lab lab.run.yaml --target pr --compare ds-live --suite "$SUITES" --runs runs
+          "$KIT/scripts/pairtest" run --lab lab.run.yaml --target pr --compare base --suite "$SUITES" --runs runs
 
       - name: Restore the live server (belt and braces)
         if: always()
@@ -82,17 +91,17 @@ jobs:
           STATUS="${{ steps.test.outcome }}"
           [ "${{ steps.build.outcome }}" = failure ] && STATUS="build failed (nothing was tested)"
           {
-            echo "**Automated test run** on the lab's Sparks for \`${HEAD_SHA::8}\`: **$STATUS** (job [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}))"
+            echo "**Automated test run** on the lab's Sparks: \`${HEAD_SHA::8}\` against its base \`${BASE_SHA::8}\`, suites $SUITES: **$STATUS** (job [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}))"
             echo
-            if [ -n "$RUN" ] && [ -f "runs/$RUN/report.md" ]; then sed -n '1,120p' "runs/$RUN/report.md"; else echo "_no report was produced; see the job log_"; fi
+            if [ -n "$RUN" ] && [ -f "runs/$RUN/report.md" ]; then sed -n '1,200p' "runs/$RUN/report.md"; else echo "_no report was produced; see the job log_"; fi
             echo
             if [ -n "$RUN" ]; then echo "_Full evidence: \`docs/evidence/$RUN/\` on this branch (report.html, charts). Posted by the spark-test workflow._"; else echo "_Posted by the spark-test workflow._"; fi
           } > comment.md
           gh pr comment "$PR" --body-file comment.md
 
-      - name: Remove older PR images from the Sparks
+      - name: Remove older PR and base images from the Sparks
         if: always()
         run: |
           for h in 192.168.1.123 192.168.1.161 192.168.1.197 192.168.1.113; do
-            ssh -o BatchMode=yes hisaza@$h "docker images --format '{{.Repository}}:{{.Tag}}' | grep '^tensorfold-dsv41:pr-' | grep -v \"^$IMAGE\$\" | xargs -r docker image rm -f >/dev/null 2>&1 || true"
+            ssh -o BatchMode=yes hisaza@$h "docker images --format '{{.Repository}}:{{.Tag}}' | grep -E '^tensorfold-dsv41:(pr|base)-' | grep -vE \"^($IMAGE|$BASE_IMAGE)\$\" | xargs -r docker image rm -f >/dev/null 2>&1 || true"
           done
