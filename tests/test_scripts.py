@@ -551,18 +551,18 @@ class MasterAddr(ScriptTest):
         return out.split("@")[-1].strip()
 
     def test_the_hostname_address_wins_as_before(self):
-        self.assertEqual(self.derived(["192.168.1.5"], "192.168.1.5 100.101.1.2"), "192.168.1.5")
+        self.assertEqual(self.derived(["192.0.2.5"], "192.0.2.5 100.101.1.2"), "192.0.2.5")
 
     def test_a_tailscale_hostname_address_gives_way_to_the_lan(self):
-        self.assertEqual(self.derived(["100.101.1.2"], "100.101.1.2 192.168.1.5"), "192.168.1.5")
-        self.assertEqual(self.derived(["100.64.0.1", "10.0.0.7"], "100.64.0.1 10.0.0.7"), "10.0.0.7")
+        self.assertEqual(self.derived(["100.101.1.2"], "100.101.1.2 192.0.2.5"), "192.0.2.5")
+        self.assertEqual(self.derived(["100.64.0.1", "198.51.100.7"], "100.64.0.1 198.51.100.7"), "198.51.100.7")
 
     def test_tailscale_first_in_hostname_i_without_getent(self):
-        self.assertEqual(self.derived([], "100.127.255.1 fd7a::1 192.168.1.5"), "192.168.1.5")
+        self.assertEqual(self.derived([], "100.127.255.1 fd7a::1 192.0.2.5"), "192.0.2.5")
 
     def test_an_address_just_outside_the_tailscale_block_is_kept(self):
-        self.assertEqual(self.derived(["100.63.0.1"], "100.63.0.1 192.168.1.5"), "100.63.0.1")
-        self.assertEqual(self.derived(["100.128.0.1"], "100.128.0.1 192.168.1.5"), "100.128.0.1")
+        self.assertEqual(self.derived(["100.63.0.1"], "100.63.0.1 192.0.2.5"), "100.63.0.1")
+        self.assertEqual(self.derived(["100.128.0.1"], "100.128.0.1 192.0.2.5"), "100.128.0.1")
 
     def test_only_tailscale_is_still_used(self):
         self.assertEqual(self.derived(["100.101.1.2"], "100.101.1.2"), "100.101.1.2")
@@ -570,7 +570,7 @@ class MasterAddr(ScriptTest):
 
     def test_an_explicit_master_addr_wins(self):
         self.env["MASTER_ADDR"] = "100.101.1.2"
-        self.assertEqual(self.derived(["192.168.1.5"], "192.168.1.5"), "100.101.1.2")
+        self.assertEqual(self.derived(["192.0.2.5"], "192.0.2.5"), "100.101.1.2")
 
 
 class RingGraphs(ScriptTest):
