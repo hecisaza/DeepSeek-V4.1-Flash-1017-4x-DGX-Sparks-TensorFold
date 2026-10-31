@@ -12,6 +12,7 @@
 #      chat format as encoding/encoding.py, which the server cannot run)
 #   6. a read-only NFS volume of this Spark's HF_CACHE on each worker, checked: every file a rank reads, by size
 #   7. Engram's tables on each worker's disk, or with ENGRAM_PACKED=1 each Spark's packed shards (tf-dsv41-engram-pack)
+#   8. with RANK_LOCAL=1, each worker's weight file on its own disk
 # ./start.sh runs this by itself when needed. Safe to re-run: every step skips work that is already done.
 # Pass --rebuild to rebuild the image from scratch.
 set -euo pipefail
@@ -223,21 +224,26 @@ for i in 1 2 3; do
 done
 
 # ---------------------------------------------------------------- 8. each worker's weight file on its disk
-# start.sh mounts it when it matches this Spark's copy, so a start reads no weights over NFS (RANK_LOCAL=0: none)
+# RANK_LOCAL=1: start.sh mounts the copy when it matches this Spark's file. A second weight file of a node in the folder
+# stops that rank (rank_cache.find: SeveralRankCaches), so the folder holds only the file the worker reads.
 IFS=, read -r -a ord <<<"$(node_order)"
 for i in 1 2 3; do
   [[ "$RANK_LOCAL" == 1 ]] || break
   rf=$(rank_file "${ord[i]}"); [[ -n "$rf" ]] || die "no weight file of node ${ord[i]} in $DATA_DIR/rank-cache"
-  name=${rf##*/}; size=$(stat -c %s "$rf")
-  have=$(worker "$i" "stat -c %s $WORKER_RANK_DIR/$name 2>/dev/null || echo 0")
-  if [[ "$have" == "$size" ]]; then log "Worker $i ($(worker_host "$i")): its weight file on its disk"; continue; fi
-  free=$(worker "$i" "mkdir -p $WORKER_RANK_DIR && df -B1 --output=avail $WORKER_RANK_DIR | tail -1")
+  name=${rf##*/}; size=$(stat -c %s "$rf"); stamp=$(rank_stamp "$rf")
+  worker "$i" "mkdir -p $WORKER_RANK_DIR && find $WORKER_RANK_DIR -maxdepth 1 -type f -name 'rank?of4-*' ! -name '$name' -delete" ||
+    die "could not clear the old weight files in $WORKER_RANK_DIR on $(worker_host "$i")"
+  have=$(worker "$i" "stat -c '%s %Y' $WORKER_RANK_DIR/$name 2>/dev/null || echo none")
+  if [[ "$have" == "$stamp" ]]; then log "Worker $i ($(worker_host "$i")): its weight file on its disk"; continue; fi
+  # (an older copy of the same name is out of date: it no longer holds the space)
+  worker "$i" "rm -f $WORKER_RANK_DIR/$name" || die "could not remove the old weight file on $(worker_host "$i")"
+  free=$(worker "$i" "df -B1 --output=avail $WORKER_RANK_DIR | tail -1")
   if ! (( ${free:-0} > size + 10 * 1024 ** 3 )); then
     warn "$(worker_host "$i") has $(( ${free:-0} / 1024 ** 3 )) GiB free in WORKER_RANK_DIR, its weight file $(( size / 1024 ** 3 )) GiB and 10 to spare: rank $i keeps reading it over NFS"
     continue
   fi
   log "Worker $i ($(worker_host "$i")): copying its weight file to its disk ($(( size / 1024 ** 3 )) GiB over NFS, once)"
-  worker "$i" "docker run --rm --network none --user \$(id -u):\$(id -g) -v '$NFS_VOLUME:/hf:ro' -v $WORKER_RANK_DIR:/out --entrypoint bash '$BASE_IMAGE' -c 'cp /hf/$DATA_SUB/rank-cache/$name /out/$name.part && mv /out/$name.part /out/$name'" ||
+  worker "$i" "docker run --rm --network none --user \$(id -u):\$(id -g) -v '$NFS_VOLUME:/hf:ro' -v $WORKER_RANK_DIR:/out --entrypoint bash '$IMAGE' -c 'cp --preserve=timestamps /hf/$DATA_SUB/rank-cache/$name /out/$name.part && mv /out/$name.part /out/$name'" ||
     die "copying the weight file to $(worker_host "$i") failed"
 done
 

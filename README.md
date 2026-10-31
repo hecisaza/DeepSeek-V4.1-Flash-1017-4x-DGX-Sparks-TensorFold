@@ -293,10 +293,14 @@ here. The worker across the ring reaches spark1 through a neighbour, and on that
 over a management network can be given its fabric address with `FABRIC_PEER2` / `FABRIC_PEER3`. `MASTER_ADDR` is derived
 from this Spark's own addresses and passes over a Tailscale one (`100.64.0.0/10`) unless it has no other; set it
 yourself if the workers reach spark1 elsewhere.
-Each worker's weight file (~77-81 GB) is the exception: `scripts/prepare.sh` copies the one a worker reads to its own
-disk once (`WORKER_RANK_DIR`, under `~/.cache/dsv41-tensorfold`), and `start.sh` mounts that copy when its name and
-size match spark1's, so a start reads no weights over NFS. A worker without a matching copy (short of disk, say)
-reads over NFS as before, with a warning. `RANK_LOCAL=0` turns the copies off.
+`RANK_LOCAL=1` (opt-in) gives each worker its weight file (~77-81 GB) on its own disk as well: `scripts/prepare.sh`
+copies the one a worker reads to `WORKER_RANK_DIR` (under `~/.cache/dsv41-tensorfold`), and `start.sh` mounts that copy
+when its name, size and modification time match spark1's, so a start reads no weights over NFS. A worker without a
+matching copy (short of disk, say) reads over NFS, with a warning. It costs ~80 GB on each worker. Copies are kept for
+each `DATA_SUB`, so `ABLIT` builds do not share them; a folder you no longer use, or the copies after going back to
+`RANK_LOCAL=0`, are yours to delete. On a four-GB10 ring [shalk3](https://github.com/shalk3) measured the engine's load
+at 315 s before and 96 s after, with one worker mounting over 2.5 GbE
+([#19](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/19)).
 
 ## Engram's packed rows (opt-in)
 
@@ -367,7 +371,7 @@ Settings come from the environment, then `scripts/local.sh`, then `./.env`, then
 | `GRAPHS` / `SIDE` / `PREFETCH` | 1 / 1 / 1 | CUDA graphs, the side stream, the paced L2 prefetch |
 | `ENGRAM_PACKED` / `ENGRAM_OWNED` | 0 / 1 | Engram's rows from packed shards; each Spark its quarter of them ([above](#engrams-packed-rows-opt-in)) |
 | `ENGRAM_CACHE_MIB` / `ENGRAM_INSTREAM` | 2048 / 0 | with packing: the row cache a Spark; the round's wait as a stream host step |
-| `RANK_LOCAL` / `WORKER_RANK_DIR` | 1 / `~/.cache/dsv41-tensorfold/rank-cache-...` | each worker's weight file from its own disk ([NFS](#nfs)) |
+| `RANK_LOCAL` / `WORKER_RANK_DIR` | 0 / `~/.cache/dsv41-tensorfold/rank-cache-...` | each worker's weight file from its own disk ([NFS](#nfs)) |
 | `ROUND_MS` | measured table | a decode round's ms by its rows, the price the lane uses to choose drafts ([Performance](#performance)) |
 | `DRAFT_MS` | 25 | the one-stream draft chooser's per-round constant (`TF_DS_DRAFT_MS`) |
 | `SERVED_K` | solo | `solo`, `all` or `off`: where the per-stream draft chooser trims a round (`TF_DS_SAMPLE_CAND`, `TF_DS_PREPASS`, `TF_DS_EXPERT_EXIT`, `TF_DS_PREFILL_YIELD`, `TF_DS_DRAFT_ROW_MS` below are engine switches) |

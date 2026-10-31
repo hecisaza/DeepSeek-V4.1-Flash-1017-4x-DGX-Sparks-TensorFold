@@ -332,6 +332,7 @@ node_order() { echo 0,1,2,3; }
         w2 = Path(rank_dir.replace("$HOME", str(self.sim / "home" / "w2")))
         w2.mkdir(parents=True)
         (w2 / "rank2of4-abc.bin").write_bytes(b"x" * 12)  # the size of this Spark's node-2 file
+        os.utime(w2 / "rank2of4-abc.bin", (1000, cache.joinpath("rank2of4-abc.bin").stat().st_mtime))
         w3 = Path(rank_dir.replace("$HOME", str(self.sim / "home" / "w3")))
         w3.mkdir(parents=True)
         (w3 / "rank3of4-abc.bin").write_bytes(b"x" * 5)  # a partial copy: not used
@@ -341,7 +342,7 @@ node_order() { echo 0,1,2,3; }
             (self.sim / "docker.log").unlink()
             return {l.split()[0]: l for l in log.splitlines() if " docker run -d " in l}
 
-        code, out = self.run_script(["start.sh", "restart"], {"PREPARE": "0"})
+        code, out = self.run_script(["start.sh", "restart"], {"PREPARE": "0", "RANK_LOCAL": "1"})
         self.assertEqual(code, 0, out)
         r = runs()
         self.assertIn(":/rank-local:ro", r["w2"], out)
@@ -354,6 +355,20 @@ node_order() { echo 0,1,2,3; }
         self.assertEqual(code, 0, out)
         self.assertNotIn("/rank-local", "".join(runs().values()), out)
         self.assertNotIn("reads its weight file over NFS", out)
+        # a copy of the same name and size baked earlier than this Spark's file holds other bytes: NFS, with a warning
+        os.utime(w2 / "rank2of4-abc.bin", (1000, 1000))
+        code, out = self.run_script(["start.sh", "restart"], {"PREPARE": "0", "RANK_LOCAL": "1"})
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("/rank-local", "".join(runs().values()), out)
+        self.assertIn("rank 2 reads its weight file over NFS", out)
+        # off by default: no copies, no warnings
+        code, out = self.run_script(["start.sh", "restart"], {"PREPARE": "0"})
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("/rank-local", "".join(runs().values()), out)
+        self.assertNotIn("reads its weight file over NFS", out)
+        code, out = self.run_script(["start.sh", "restart"], {"PREPARE": "0", "RANK_LOCAL": "yes"})
+        self.assertNotEqual(code, 0, out)
+        self.assertIn("RANK_LOCAL is 0 or 1", out)
 
     def test_restart_stops_when_a_rank_cannot_be_stopped(self):
         for h in ["head", "w1", "w2", "w3"]:
@@ -499,6 +514,11 @@ class PreparedState(ScriptTest):
     def test_nfs_path_changes_marker(self):
         self.assertChanges({"NFS_PATH": "/other"})
 
+    def test_rank_local_changes_the_marker_only_when_on(self):
+        self.assertEqual(self.state(), self.state({"RANK_LOCAL": "0"}))
+        self.assertChanges({"RANK_LOCAL": "1"})
+        self.assertNotEqual(self.state({"RANK_LOCAL": "1"}), self.state({"RANK_LOCAL": "1", "WORKER_RANK_DIR": "/other"}))
+
     def test_nfs_volume_changes_marker(self):
         self.assertChanges({"NFS_VOLUME": "other-volume"})
 
@@ -593,6 +613,70 @@ echo "$g" >> "$SIM/built"
 compgen -G "$out/rank${g}of4-*.bin" >/dev/null && { echo "$out already holds a weight file of rank $g" >&2; exit 1; }
 printf 'weights %s' "$g" > "$out/rank${g}of4-$(printf '[rank %s]' "$g" | sha256sum | cut -c1-20).bin"
 """
+
+
+class PrepareWorkerCopies(ScriptTest):
+    """Step 8 of prepare.sh with RANK_LOCAL=1: the worker's folder holds only the file it reads, up to date."""
+
+    def setUp(self):
+        super().setUp()
+        source = (self.repo / "scripts" / "prepare.sh").read_text()
+        self.step = source[source.index("# ---------------------------------------------------------------- 8."):source.index("write_prepared_marker || die")]
+        # docker run's copy, done by the shell: /hf is this Spark's HF_CACHE, /out the -v folder
+        (self.tmp / "bin" / "docker").write_text("#!" + BASH + r"""
+echo "$*" >> "$SIM/docker-args"
+out=""; for a in "$@"; do [[ "$a" == *:/out ]] && out=${a%:/out}; done
+script=${!#}; script=${script//\/hf/$HF_CACHE}; script=${script//\/out/$out}
+exec """ + BASH + r""" -c "$script"
+""")
+        self.env["HF_CACHE"] = str(self.tmp / "hf")
+        code, out = self.bash('echo "@$DATA_DIR|$WORKER_RANK_DIR"')
+        self.assertEqual(code, 0, out)
+        data_dir, rank_dir = out.split("@")[-1].strip().split("|")
+        self.cache = Path(data_dir) / "rank-cache"
+        self.cache.mkdir(parents=True)
+        for n in range(4):
+            (self.cache / f"rank{n}of4-new.bin").write_bytes(b"n" * (10 + n))
+        self.home_dir = {h: Path(rank_dir.replace("$HOME", str(self.sim / "home" / h))) for h in ("w1", "w2", "w3")}
+
+    def run_step(self):
+        return self.bash("die() { echo \"DIED: $*\" >&2; exit 1; }\nnode_order() { echo 0,1,2,3; }\n" + self.step,
+                         {"RANK_LOCAL": "1", "IMAGE": "runtime-only", "BASE_IMAGE": "base-missing"})
+
+    def test_copies_on_the_runtime_image_and_keeps_the_time(self):
+        code, out = self.run_step()
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("base-missing", (self.sim / "docker-args").read_text())
+        for i, h in enumerate(("w1", "w2", "w3"), 1):
+            copy = self.home_dir[h] / f"rank{i}of4-new.bin"
+            self.assertEqual(copy.read_bytes(), (self.cache / copy.name).read_bytes())
+            self.assertEqual(int(copy.stat().st_mtime), int((self.cache / copy.name).stat().st_mtime))
+        (self.sim / "docker-args").unlink()
+        code, out = self.run_step()
+        self.assertEqual(code, 0, out)
+        self.assertFalse((self.sim / "docker-args").exists(), "an up-to-date copy was copied again")
+
+    def test_an_old_weight_file_beside_the_new_one_is_removed(self):
+        # two files of one node stop the rank at start (rank_cache.find: SeveralRankCaches)
+        d = self.home_dir["w2"]
+        d.mkdir(parents=True)
+        (d / "rank2of4-old.bin").write_bytes(b"o" * 12)
+        (d / "rank3of4-old.bin").write_bytes(b"o" * 13)
+        (d / "rank2of4-old.bin.part").write_bytes(b"o")
+        (d / "keep.txt").write_text("not a weight file")
+        code, out = self.run_step()
+        self.assertEqual(code, 0, out)
+        self.assertEqual(sorted(f.name for f in d.iterdir()), ["keep.txt", "rank2of4-new.bin"])
+
+    def test_a_copy_of_the_same_name_and_size_but_older_is_copied_again(self):
+        d = self.home_dir["w1"]
+        d.mkdir(parents=True)
+        stale = d / "rank1of4-new.bin"
+        stale.write_bytes(b"s" * 11)
+        os.utime(stale, (1000, 1000))
+        code, out = self.run_step()
+        self.assertEqual(code, 0, out)
+        self.assertEqual(stale.read_bytes(), b"n" * 11)
 
 
 class PrepareWeightFiles(ScriptTest):

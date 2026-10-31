@@ -18,9 +18,9 @@ to be set to, measured on one GB10 of this cluster -- `recordsize=4K`, `encrypti
 row read pull a whole compressed record: about 500 rows a second, and over 500 seconds to prefill a 16k-token prompt.
 The recipe itself is unchanged.
 
-- **2026-10-28** -- (shalk3) Each worker's weight file from its own disk: `scripts/prepare.sh` copies the ~77-81 GB
-  file a worker reads there once, and `start.sh` mounts the copy when its name and size match spark1's, else that
-  worker reads over NFS as before, with a warning; `RANK_LOCAL=0` turns it off. On a four-GB10 ring whose spark3
+- **2026-10-28** -- (shalk3) Each worker's weight file from its own disk, opt-in with `RANK_LOCAL=1`: `scripts/prepare.sh`
+  copies the ~77-81 GB file a worker reads there, and `start.sh` mounts the copy when its name, size and modification
+  time match spark1's, else that worker reads over NFS as before, with a warning. On a four-GB10 ring whose spark3
   mounts over a 2.5 GbE LAN (the others over CX7), the engine's load fell from 315 s to 96 s and a start from
   mains-off to serving from 417 s to 197 s; the replies are unchanged (the same file, read from another disk). The workers need the space:
   one short of it keeps NFS. `tests/test_scripts.py` covers a matching copy, a partial one, none, and `RANK_LOCAL=0`.

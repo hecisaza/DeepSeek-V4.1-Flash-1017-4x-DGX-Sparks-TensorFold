@@ -44,7 +44,7 @@ for v in CONTEXT POOL PARALLEL ROUND_ROWS MAX_TOKENS; do [[ "${!v}" =~ ^[1-9][0-
 (( POOL >= CONTEXT )) || die "POOL ($POOL) holds every stream's positions together: at least CONTEXT ($CONTEXT)"
 (( PARALLEL <= 16 )) || die "PARALLEL is 1 to 16, not $PARALLEL"
 [[ "$SERVED_K" =~ ^(solo|all|off)$ ]] || die "SERVED_K is solo, all or off, not $SERVED_K"
-for v in THINKING DRAFTS VISION RDMA GRAPHS SIDE PREFETCH ENGRAM_AIO ENGRAM_PACKED ENGRAM_OWNED ENGRAM_INSTREAM; do [[ "${!v}" =~ ^[01]$ ]] || die "$v is 0 or 1, not ${!v}"; done
+for v in THINKING DRAFTS VISION RDMA GRAPHS SIDE PREFETCH ENGRAM_AIO ENGRAM_PACKED ENGRAM_OWNED ENGRAM_INSTREAM RANK_LOCAL; do [[ "${!v}" =~ ^[01]$ ]] || die "$v is 0 or 1, not ${!v}"; done
 [[ "$ENGRAM_CACHE_MIB" =~ ^[0-9]+$ ]] || die "ENGRAM_CACHE_MIB is a count of MiB, not $ENGRAM_CACHE_MIB"
 [[ "$ENGRAM_INSTREAM" == 0 || ( "$ENGRAM_PACKED" == 1 && "$ENGRAM_AIO" == 1 ) ]] || die "ENGRAM_INSTREAM=1 needs ENGRAM_PACKED=1 and ENGRAM_AIO=1"
 check_workers
@@ -142,10 +142,10 @@ for i in 3 2 1; do
   # its weight file from its own disk when the copy there (prepare.sh) matches this Spark's, else over NFS
   rank_dir="$DATA/rank-cache"; rank_mount=""
   rf=""; [[ "$RANK_LOCAL" != 1 ]] || rf=$(rank_file "${ORD[i]}")
-  if [[ -n "$rf" ]] && worker "$i" "[[ \$(stat -c %s $WORKER_RANK_DIR/${rf##*/} 2>/dev/null) == $(stat -c %s "$rf") ]]" 2>/dev/null; then
+  if [[ -n "$rf" ]] && worker "$i" "[[ \"\$(stat -c '%s %Y' $WORKER_RANK_DIR/${rf##*/} 2>/dev/null)\" == '$(rank_stamp "$rf")' ]]" 2>/dev/null; then
     rank_dir=/rank-local; rank_mount="-v $WORKER_RANK_DIR:/rank-local:ro"
   elif [[ "$RANK_LOCAL" == 1 ]]; then
-    warn "rank $i reads its weight file over NFS: no matching copy in $WORKER_RANK_DIR on $(worker_host "$i") (scripts/prepare.sh makes one)"
+    warn "rank $i reads its weight file over NFS: no matching copy in $WORKER_RANK_DIR on $(worker_host "$i") (PREPARE=1 ./start.sh restart makes one)"
   fi
   # Engram's tables from the worker's own disk (prepare.sh), the rest over NFS; with packed shards the tables' headers
   # come over NFS and the rows from the shards on the worker's disk
