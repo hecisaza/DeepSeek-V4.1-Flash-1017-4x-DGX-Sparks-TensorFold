@@ -13,7 +13,7 @@ and 32 MB/s, and a 16k-token prompt took over 500 seconds to prefill.
 
 | Dataset | Rows/s | Latency | CPU per row |
 | --- | --- | --- | --- |
-| `recordsize=128K compression=zstd` (defaults), 2 GiB ARC | ~500 | ~32 MB/s | not measured |
+| `recordsize=128K compression=zstd` (defaults), 2 GiB ARC | ~500 (~32 MB/s) | not measured | not measured |
 | `recordsize=16K encryption=aes-256-gcm` | 54,976 | 1,183 µs | 337 µs |
 | `recordsize=16K encryption=off` | 189,815 | 337 µs | 46 µs |
 | `recordsize=4K encryption=off` | 292,617 | 196 µs | 38 µs |
@@ -29,16 +29,16 @@ zfs create -o atime=off -o compression=off -o encryption=off -o primarycache=met
   -o mountpoint=/var/lib/dsv41-engram rpool/dsv41-engram
 ```
 
-Point `ENGRAM_PACKED_DIR` (packed shards) or `WORKER_ENGRAM_DIR` (the tables) at that mount, and copy the tables there
-before the first start; `scripts/prepare.sh` writes the packed shards where it is told, so a re-prepare after a
-checkpoint change is the only cost.
+Point `ENGRAM_PACKED_DIR` (packed shards) or `WORKER_ENGRAM_DIR` (the workers' tables) at that mount;
+`scripts/prepare.sh` writes to whichever you set, so a re-prepare after a checkpoint change is the only cost. Without
+packing, rank 0 reads the tables from its own checkpoint folder (`HF_CACHE`), not from `WORKER_ENGRAM_DIR`.
 
 | Setting | Why |
 | --- | --- |
-| `encryption=off` | ZFS native encryption on aarch64 runs the generic C GCM path; the accelerated one is x86-64 only (openzfs #9749, #10347, with #16601 and #19194 unmerged). It measured 7.5x the CPU and 3.5x the latency per block read, about 16 of the Spark's 20 cores at 50k rows a second, which starved the engine whenever a second request prefilled. An unencrypted child of an encrypted parent is legal (openzfs #8870), and the tables are model weights, not secrets. |
+| `encryption=off` | ZFS native encryption on aarch64 runs the generic C GCM path; the accelerated one is x86-64 only (openzfs #9749, #10347; #16601 is still open). #19194, a Linux kernel crypto API backend, merged on 2026-10-23, after these numbers were taken: on a release that has it, measure again before giving up encryption. It measured 7.5x the CPU and 3.5x the latency per block read, about 16 of the Spark's 20 cores at 50k rows a second, which starved the engine whenever a second request prefilled. An unencrypted child of an encrypted parent is legal (openzfs #8870), and the tables are model weights, not secrets. |
 | `recordsize=4K` | A row is at most one 4 KiB block either way (the direct read's aligned span), so a larger record is pure amplification: 4K moved 4 KiB per row where 16K moved 16 KiB, for 1.5x the rows. The cost is indirect-block metadata, about 6.5 GiB at 4K against the 2 GiB ARC this was measured with; raise the ARC and 4K becomes unambiguously free. |
 | `compression=off` | Dense FP8 does not compress: zle measured 1.00x over these tables, three to seven zero bytes a MiB and a longest run of six. Compression can also push a read off the direct-I/O path, and it costs about 1.21x the space. |
-| `primarycache=metadata` | Rows are near-uniformly random, so caching data only churns a small ARC. The in-memory row cache `ENGRAM_CACHE_MIB` is the cache for these reads, not ZFS's. |
+| `primarycache=metadata` | Rows are near-uniformly random, so caching data only churns a small ARC. With `ENGRAM_PACKED=1`, the in-memory row cache `ENGRAM_CACHE_MIB` is the cache for these reads, not ZFS's. |
 | `secondarycache=none` | The same argument for an L2ARC; do not ingest this dataset into one. |
 | `atime=off` | A read must not become a write. |
 | `com.sun:auto-snapshot=false` | A reproducible copy of a checkpoint's tables is never worth a snapshot. |
