@@ -7,12 +7,18 @@
 - **2026-11-01** -- `MASTER_ADDR` is derived from a Tailscale address (`100.64.0.0/10`) only when the Spark has no other
   ([n1ur0](https://github.com/n1ur0), [#21](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/21)).
   `worker_nfs` runs on the runtime image too, the last utility left on `BASE_IMAGE` after Tyler Folkman's change below.
+- **2026-10-29** -- (Tyler Folkman, tfolkman) The launcher's lock descriptors stay out of persistent children: a surviving
+  ssh or `docker logs -f` could hold `start.lock` or `prepare.lock` after its launcher exited and block the next start
+  (`tests/test_launcher_locks.py`). On a switch, NCCL's bootstrap uses a RoCE subnet every rank shares, chosen the same way
+  on all of them, instead of each node's default route; rings and triangles keep the default route, and `SOCKET_IFNAME`
+  still overrides it (`tests/test_mesh_bootstrap.py`; not run on this ring). The preparation utilities run on the
+  runtime image, so a worker holding it never pulls the build base (`tests/test_prepare_image.py`).
 - **2026-10-29** -- (SvangenStudios) `scripts/prepare.sh` stops when it cannot compute a node's weight-file index
   instead of deleting that node's weight file. The index was hashed inside the container's own `bash -c`, which the
   script's `pipefail` does not reach, so a failed `tf-dsv41-rank-cache --index-only` (a missing or unreadable shard)
   hashed empty output, matched no weight file, and the loop deleted the node's good one (~80 GB) before a rebuild that
   failed the same way. Regression tests in `tests/test_scripts.py` (`PrepareWeightFiles`).
-- **2026-10-29** -- [`docs/engram-zfs-dataset.md`](docs/engram-zfs-dataset.md): what an Engram host's ZFS dataset has
+- **2026-10-29** -- (Christopher A. Williamson) [`docs/engram-zfs-dataset.md`](docs/engram-zfs-dataset.md): what an Engram host's ZFS dataset has
 to be set to, measured on one GB10 of this cluster -- `recordsize=4K`, `encryption=off`, `compression=off`,
 `primarycache=metadata` -- with the row counts behind each one. A pool's defaults (`recordsize=128K`, `zstd`) made every
 row read pull a whole compressed record: about 500 rows a second, and over 500 seconds to prefill a 16k-token prompt.
@@ -63,7 +69,7 @@ The recipe itself is unchanged.
   and a log line with the request id. Diagnostic only: content, token IDs, usage and finish reason are unchanged, no
   call is invented and no retry started. It does not fix #14. CPU: 42 exact warning cases and ten negatives; live:
   no warning on 25 ordinary, JSON and tool-call replies.
-- **2026-10-28** -- `0037` (shalk3), the weight loader's read-ahead. A rank's weight file holds its tensors in the loader's
+- **2026-10-28** -- `0046` (shalk3), the weight loader's read-ahead. A rank's weight file holds its tensors in the loader's
   order and the loader read them one at a time, so every read waited on the disk: ~1 GB/s from an NVMe that reads
   9 GB/s in parallel. Eight threads now `pread` the file in 32 MiB chunks up to 4 GiB past the loader's furthest
   read and drop the bytes, so the loader's own reads come from the page cache; `TF_DS_LOAD_PREFETCH=0` turns it off.

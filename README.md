@@ -55,9 +55,9 @@ rank's rendezvous address). Full list: [Credits](#credits) and [`CREDITS.md`](CR
 
 **This recipe's own patches** ([`zig/patches`](zig/patches)) **are Mia's AI Lab's work, except `0008` (Hector), `0026`
 (knapcio), `0027` (Thomas Kempka), `0028` and `0029` (upstream TensorFold fixes backported by Mauvis Ledford), `0030`
-and `0031` (Mauvis Ledford), `0033` (a backport by Manuel, manuel1618), `0034` (Hironori Uchikawa, uchkw) and `0036`
+and `0031` (Mauvis Ledford), `0033` (a backport by Manuel, manuel1618), `0034` (Hironori Uchikawa, uchkw), `0036`
 (upstream TensorFold's structured output by BobClawblaw and Ash Hart, and BertholomusAI's DeepSeek-V4.1 part of it,
-ported here)** -- see
+ported here), `0039`-`0043` (SvangenStudios) and `0046` (shalk3)** -- see
 [What the patches change](#what-the-patches-change) and [Credits](#credits) for who found or shaped each specific fix
 along the way.
 
@@ -379,7 +379,7 @@ Settings come from the environment, then `scripts/local.sh`, then `./.env`, then
 
 ## What the patches change
 
-[`zig/patches`](zig/patches) apply to BertholomusAI's fork at `5940208`, in order. Flags are off by default unless
+[`zig/patches`](zig/patches) apply to BertholomusAI's fork at `5940208`, in order. (The numbers skip `0037`-`0038` and `0044`-`0045`, held for open work.) Flags are off by default unless
 marked **on**; "on, this cluster" means `scripts/local.sh` turns it on here, not the shipped default. Full
 measurements and rationale: [`CHANGELOG.md`](CHANGELOG.md); authorship: [`CREDITS.md`](CREDITS.md).
 
@@ -426,7 +426,7 @@ measurements and rationale: [`CHANGELOG.md`](CHANGELOG.md); authorship: [`CREDIT
 | `0041` | SvangenStudios | -- (tests only) | The two opt-in grammar tests use the current `HfText` API, so the server tests compile again |
 | `0042` | SvangenStudios | -- (on) | A JSON answer (`response_format`, `guided_json`) stays content when `tools` are offered; it is not parsed as tool calls |
 | `0043` | SvangenStudios | -- (on) | A reply made only of orphan DSML closing tags gets `tensorfold.tool_parse_warning` (diagnostic only; [#14](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/14)) |
-| `0037` | shalk3 | `TF_DS_LOAD_PREFETCH` (on) | The weight loader's file is read ahead by 8 threads (32 MiB chunks, at most 4 GiB past the loader), so its reads come from the page cache: a node's load 83 s -> 27 s from NVMe; the weights are unchanged |
+| `0046` | shalk3 | `TF_DS_LOAD_PREFETCH` (on) | The weight loader's file is read ahead by 8 threads (32 MiB chunks, at most 4 GiB past the loader), so its reads come from the page cache: a node's load 83 s -> 27 s from NVMe; the weights are unchanged |
 
 ### Idle RDMA CPU use
 
@@ -540,6 +540,15 @@ part of this repository.
   and **BertholomusAI ([bertholomus](https://github.com/bertholomus))**: the structured output that patch `0036`
   ports to this recipe (BobClawblaw's lane-core grammar and libtfgrammar, Ash Hart's required tool calls and
   grammar-aware drafting, bertholomus's DeepSeek-V4.1 hooks and DSML tool-call grammar).
+- **[SvangenStudios](https://github.com/SvangenStudios)**: patches `0039`-`0043`, and `stop.sh`'s and `start.sh`'s checks and
+  tests in [PR #24](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/24), [PR #25](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/25) and [PR #33](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/33).
+- **[shalk3](https://github.com/shalk3)**: patch `0046` ([PR #20](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/20)) and each worker's own weight file,
+  `RANK_LOCAL` ([PR #19](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/19)).
+- **Tyler Folkman ([tfolkman](https://github.com/tfolkman))**: the launcher locks kept out of persistent children
+  ([PR #22](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/22)), the switched mesh's NCCL bootstrap ([PR #23](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/23)) and the preparation utilities on the runtime
+  image ([PR #26](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/26)).
+- **Christopher A. Williamson ([cawilliamson](https://github.com/cawilliamson))**: the ZFS page for Engram's tables,
+  [`docs/engram-zfs-dataset.md`](docs/engram-zfs-dataset.md) ([PR #38](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/38)).
 - [xgrammar](https://github.com/mlc-ai/xgrammar) (Apache-2.0) with dlpack (Apache-2.0) and picojson (BSD-2-Clause),
   compiled into the image's `libtfgrammar.so`.
 - [PyAV](https://github.com/PyAV-Org/PyAV) (BSD-3-Clause), [Zig](https://ziglang.org) (MIT), NVIDIA's PyTorch

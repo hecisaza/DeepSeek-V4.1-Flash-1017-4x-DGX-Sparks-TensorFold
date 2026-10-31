@@ -47,8 +47,9 @@ DGX Sparks. Almost everything that makes it work was built by others. Its own wo
 **Every patch is Mia's AI Lab's own work, except `0008`, which is Hector's, `0026`, which is knapcio's, `0027`, which is
 Thomas Kempka's, `0028` and `0029`, upstream TensorFold fixes backported by Mauvis Ledford, `0030` and `0031`, which are
 Mauvis Ledford's, `0033`, a backport by Manuel (manuel1618), `0034`, which is Hironori Uchikawa's (uchkw,
-Codex-assisted), and `0036`, a port of upstream TensorFold's structured output (BobClawblaw, Ash Hart) and of
-BertholomusAI's DeepSeek-V4.1 part of it (bertholomus).** At a glance:
+Codex-assisted), `0036`, a port of upstream TensorFold's structured output (BobClawblaw, Ash Hart) and of
+BertholomusAI's DeepSeek-V4.1 part of it (bertholomus), `0039`-`0043`, which are SvangenStudios's, and `0046`, which is
+shalk3's.** At a glance:
 
 | Patches | Author | What |
 | --- | --- | --- |
@@ -71,6 +72,7 @@ BertholomusAI's DeepSeek-V4.1 part of it (bertholomus).** At a glance:
 | `0041` | [SvangenStudios](https://github.com/SvangenStudios) | the server tests compile again (two opt-in grammar tests on the current `HfText` API) |
 | `0042` | [SvangenStudios](https://github.com/SvangenStudios) | JSON answers stay JSON beside offered tools (no tool-call parsing on the JSON channel) |
 | `0043` | [SvangenStudios](https://github.com/SvangenStudios) | a diagnostic for replies made only of orphan DSML closing tags |
+| `0046` | [shalk3](https://github.com/shalk3) | a rank's weight file read ahead of the loader (`TF_DS_LOAD_PREFETCH`) |
 
 The per-patch notes below also credit everyone who helped find or shape a specific fix along the way -- Hector's
 reviewer, Codex and Grok's live-bug diagnosis and design reviews, an outside reviewer's observation -- without
@@ -294,7 +296,22 @@ BertholomusAI's fork ([bertholomus/TensorFold](https://github.com/bertholomus/Te
     `scripts/prepare.sh`), with the offline tests `tests/test_scripts.py`;
   - [PR #5](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/5):
     `tools/validate.py` and `tools/needle_bench.py` fail on bad references, error replies, malformed tool calls and bad
-    calibrations instead of passing, with the offline tests `tests/test_validation_tools.py`.
+    calibrations instead of passing, with the offline tests `tests/test_validation_tools.py`;
+  - [PR #24](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/24): `stop.sh` reads `/health`'s `live.connections` and says when it cannot, and `start.sh`'s smoke test
+    needs a real completion, with `tests/test_start_smoke.py` and `tests/test_stop_health.py`;
+  - [PR #25](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/25): brackets around an IPv6 address in `start.sh`'s URLs, with `tests/test_start_urls.py`;
+  - [PR #33](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/33): `scripts/prepare.sh` stops on a failed weight-file index instead of deleting the weight file.
+- Contributed by **[shalk3](https://github.com/shalk3)**: [PR #19](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/19), each worker's own weight file
+  (`RANK_LOCAL`, `WORKER_RANK_DIR`) in `scripts/config.sh`, `scripts/prepare.sh` and `start.sh`.
+- Contributed by **Tyler Folkman ([tfolkman](https://github.com/tfolkman))**:
+  - [PR #22](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/22): the launcher's lock descriptors kept out of persistent children (`scripts/nodes.sh`, `start.sh`),
+    with `tests/test_launcher_locks.py`;
+  - [PR #23](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/23): NCCL's bootstrap on a RoCE subnet every rank shares (`scripts/nodes.sh`), with
+    `tests/test_mesh_bootstrap.py`;
+  - [PR #26](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/26): the preparation utilities on the runtime image (`scripts/prepare.sh`), with
+    `tests/test_prepare_image.py`.
+- Contributed by **Christopher A. Williamson ([cawilliamson](https://github.com/cawilliamson))**: [PR #38](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/38),
+  [`docs/engram-zfs-dataset.md`](docs/engram-zfs-dataset.md), with its measurements.
 
 ## Tools and platform
 
