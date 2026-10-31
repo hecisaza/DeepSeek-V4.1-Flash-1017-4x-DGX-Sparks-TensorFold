@@ -25,6 +25,10 @@ on:
         description: "repetitions (default 1; 2 = counterbalanced PR/base then base/PR, twice the lab time)"
         required: false
         type: string
+      attempt:
+        description: "set by the verify step when it reruns a PR with a claim test (2); leave empty"
+        required: false
+        type: string
   workflow_call:
     inputs:
       pr:
@@ -34,6 +38,9 @@ on:
         required: false
         type: string
       reps:
+        required: false
+        type: string
+      attempt:
         required: false
         type: string
       called:
@@ -54,6 +61,13 @@ jobs:
        contains(fromJSON('["hecisaza"]'), github.event.pull_request.user.login))
     runs-on: [self-hosted, spark-lab]
     timeout-minutes: 240
+    outputs:
+      verdict: ${{ steps.verdict.outputs.verdict }}
+      claim: ${{ steps.test.outputs.claim }}
+      pr_url: ${{ steps.verdict.outputs.pr_url }}
+      pr_repo: ${{ steps.verdict.outputs.pr_repo }}
+      pr: ${{ steps.verdict.outputs.pr }}
+      suites: ${{ steps.verdict.outputs.suites }}
     # no concurrency group: the one runner with the spark-lab label runs one job at a time, and GitHub keeps every job
     # queued until it is free (a concurrency group keeps only one pending run and cancels the others)
     env:
@@ -120,8 +134,14 @@ jobs:
       - name: Test the PR against its base (stage 3)
         id: test
         run: |
-          # a PR that fixes an issue carries its reproduction script: it runs against both builds as the repro suite
+          # a PR that fixes an issue carries its reproduction script; otherwise a claim test written by the verify step may
+          # exist under claims/ on this repository's main. Either runs against both builds as the repro suite.
           R=$(ls tests/repro-issue-*.sh 2>/dev/null | head -1); OPTS=(); S="$SUITES"
+          SLUG=$(tr / - <<<"$PR_REPO")
+          if [ -z "$R" ] && gh api "repos/$THIS_REPO/contents/claims/$SLUG-pr-$PR.sh?ref=main" -H "Accept: application/vnd.github.raw" > claim.sh 2>/dev/null && [ -s claim.sh ]; then
+            echo "claim test found on main: claims/$SLUG-pr-$PR.sh"; R=claim.sh
+          else rm -f claim.sh; fi
+          echo "claim=$([ "$R" = claim.sh ] && echo yes || echo none)" >> "$GITHUB_OUTPUT"
           if [ -n "$R" ]; then OPTS=(--opt "repro_cmd=bash $R {api} {model}"); case ",$S," in *,repro,*) ;; *) S="$S,repro";; esac; fi
           echo "SUITES_RUN=$S" >> "$GITHUB_ENV"
           "$KIT/scripts/pairtest" run --lab lab.run.yaml --target pr --compare base --suite "$S" --runs runs --opt "reps=$REPS" "${OPTS[@]}"
@@ -140,10 +160,13 @@ jobs:
           "$KIT/scripts/evidence-review.sh" "runs/$RUN" --checkout . --base "$BASE_SHA" --head "$CAND_SHA" --pr-url "$PR_URL" --pr-file pr.md --timeout 25 || true
 
       - name: Merge readiness (computed from the results, the second opinion and the open PRs; a person merges)
+        id: verdict
         if: always() && steps.test.outcome != 'skipped'
         run: |
           RUN=$(ls -t runs 2>/dev/null | head -1); [ -n "$RUN" ] || exit 0
           "$KIT/scripts/verdict.py" "runs/$RUN" --review "runs/$RUN/REVIEW.md" --sync sync.txt --pr "$PR" || true
+          CLS=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['class'])" "runs/$RUN/verdict.json" 2>/dev/null || echo "")
+          { echo "verdict=$CLS"; echo "pr_url=$PR_URL"; echo "pr_repo=$PR_REPO"; echo "pr=$PR"; echo "suites=$SUITES"; } >> "$GITHUB_OUTPUT"
           # the class as a label, on PRs of this repository only
           if [ "$PR_REPO" = "$THIS_REPO" ] && [ -s "runs/$RUN/verdict.json" ]; then
             L=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['label'])" "runs/$RUN/verdict.json")
@@ -161,8 +184,8 @@ jobs:
           cp "runs/$RUN/report.md" "runs/$RUN/report.html" "docs/evidence/$RUN/" 2>/dev/null || true
           cp runs/"$RUN"/*.svg "docs/evidence/$RUN/" 2>/dev/null || true
           cp "runs/$RUN/REVIEW.md" "runs/$RUN/VERDICT.md" "docs/evidence/$RUN/" 2>/dev/null || true
-          git config user.name "hecisaza"
-          git config user.email "76170012+hecisaza@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add docs/evidence
           git commit -q -m "evidence: $RUN (automated test run of $PR_URL)" || exit 0
           case "$EVIDENCE_REF" in evidence/*) FORCE=--force;; *) FORCE=;; esac
@@ -205,6 +228,8 @@ jobs:
             runs/*/review-missing.txt
             runs/*/VERDICT.md
             runs/*/verdict.json
+            runs/*/review/pr.patch
+            runs/*/review/PR.md
             runs/*/log.txt
           if-no-files-found: ignore
 
@@ -214,3 +239,55 @@ jobs:
           for h in 192.168.1.123 192.168.1.161 192.168.1.197 192.168.1.113; do
             ssh -o BatchMode=yes hisaza@$h "docker images --format '{{.Repository}}:{{.Tag}}' | grep -E '^tensorfold-dsv41:(pr|base)-' | grep -vE \"^($IMAGE|$BASE_IMAGE)\$\" | xargs -r docker image rm -f >/dev/null 2>&1 || true"
           done
+
+  verify:
+    # SAFE, UNVERIFIED on the first attempt: an agent writes the claim test the suites lacked, it must fail on the base,
+    # it is committed under claims/ on main and the pipeline reruns this PR with it (attempt 2, the cap: no loop)
+    needs: test
+    if: always() && needs.test.result == 'success' && needs.test.outputs.verdict == 'SAFE, UNVERIFIED' && needs.test.outputs.claim == 'none' && (inputs.attempt || '1') != '2'
+    runs-on: [self-hosted, spark-lab]
+    timeout-minutes: 90
+    env:
+      KIT: /root/inference-agent-kit
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      THIS_REPO: ${{ github.repository }}
+      LIVE_API: http://192.168.1.123:8888/v1
+      LIVE_MODEL: DeepSeek-V4.1-Flash-1017
+      PR_URL: ${{ needs.test.outputs.pr_url }}
+      PR_REPO: ${{ needs.test.outputs.pr_repo }}
+      PR: ${{ needs.test.outputs.pr }}
+      SUITES: ${{ needs.test.outputs.suites }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: spark-test-${{ github.run_id }}
+          path: art
+
+      - name: An agent writes the claim test the suites lacked; it must fail on the base before it is accepted
+        id: claim
+        run: |
+          RUN=$(ls -t art/runs | head -1)
+          "$KIT/scripts/claim-agent.sh" "art/runs/$RUN" --pr-url "$PR_URL" --out claim.sh 2>&1 | tee claim-run.txt
+          R=$(grep -o 'RESULT: .*' claim-run.txt | tail -1); echo "verify: ${R:-no result}" >> "$GITHUB_STEP_SUMMARY"
+          case "$R" in "RESULT: claim "*) echo "ok=yes" >> "$GITHUB_OUTPUT";; *) echo "ok=no" >> "$GITHUB_OUTPUT";; esac
+
+      - name: Keep the agent's attempt (task, rounds, base run)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: claim-${{ github.run_id }}
+          path: art/runs/*/claim/**
+          if-no-files-found: ignore
+
+      - name: Commit the claim test under claims/ on main and rerun the pipeline with it (attempt 2)
+        if: steps.claim.outputs.ok == 'yes'
+        run: |
+          rm -rf fork && git clone -q --depth 1 "https://x-access-token:$GH_TOKEN@github.com/$THIS_REPO.git" fork
+          SLUG=$(tr / - <<<"$PR_REPO"); mkdir -p fork/claims; cp claim.sh "fork/claims/$SLUG-pr-$PR.sh"
+          git -C fork config user.name "github-actions[bot]"
+          git -C fork config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C fork add claims
+          git -C fork commit -q -m "claims: $SLUG-pr-$PR.sh, the claim test written by the verify step for $PR_URL"
+          git -C fork push -q origin HEAD:main
+          gh workflow run spark-test.yml -R "$THIS_REPO" -f "pr=$PR_URL" -f "attempt=2" ${SUITES:+-f "suites=$SUITES"}
+          echo "claim committed as claims/$SLUG-pr-$PR.sh; attempt 2 dispatched" >> "$GITHUB_STEP_SUMMARY"
