@@ -37,9 +37,14 @@ WORKER3="${WORKER3:-}"; FABRIC_PEER3="${FABRIC_PEER3:-}"; WORKER_HF_CACHE3="${WO
 MASTER_PORT="${MASTER_PORT:-29760}"  # the ranks' rendezvous port (keep it on the private links)
 # The rendezvous address: this node's address every worker reaches (what its hostname resolves to, else its first one).
 # On a ring the workers across it reach it through a neighbour (scripts/nodes.sh says which address each gets).
-_ma=$(getent ahostsv4 "$(hostname)" 2>/dev/null | awk '$1 !~ /^127\./ {print $1; exit}' || true)
+# A Tailscale address (100.64.0.0/10, which hostname and `hostname -I` can name first) only when the node has no other:
+# the ranks rendezvous on the private links (issue #21). MASTER_ADDR overrides all of this.
+_ts='^100[.](6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])[.]'
+_ma=$(getent ahostsv4 "$(hostname)" 2>/dev/null | awk -v t="$_ts" '$1 !~ /^127\./ && $1 !~ t {print $1; exit}' || true)
+[[ -n "$_ma" ]] || _ma=$(hostname -I 2>/dev/null | tr ' ' '\n' | awk -v t="$_ts" 'NF && $1 !~ /:/ && $1 !~ t {print $1; exit}' || true)
 [[ -n "$_ma" ]] || _ma=$(hostname -I 2>/dev/null | awk '{print $1}' || true)
 MASTER_ADDR="${MASTER_ADDR:-$_ma}"
+unset _ts
 SOCKET_IFNAME="${SOCKET_IFNAME:-}"     # NCCL bootstrap override; auto: TP2 link, TP>2 common fabric or default route
 # The 2D split's node (role) each NCCL rank serves (the engine's TF_DS_2D_ORDER). auto: 0,1,3,2 on a ring (every row
 # and column partner then on a cable of its own; NCCL's all-gathers go round the ring in rank order), 0,1,2,3 on a switch.
