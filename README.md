@@ -161,6 +161,12 @@ weights (`tools/dsv41-zig/native/check_native.py`).
   (`HF_CACHE`, default `~/.cache/huggingface`), and an NFS export of that cache, read-only, to each worker's address
   on its link (see [NFS](#nfs)).
 - About 100 GB of free memory on each Spark (the weights take ~80 GiB a node).
+  `__vm_enough_memory` lines in `dmesg` with an HTTP 500 are the host's overcommit policy refusing one mapping, not the
+  model's size: with the default `vm.overcommit_memory=0` the kernel refuses a mapping larger than RAM plus swap.
+  Long conversations used to ask for such mappings while rendering the chat template (1,999 messages: 66 GiB touched
+  and refused reservations of 177-233 GB, [#36](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/36));
+  the template has written its pieces out since [#18](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/18),
+  so update first rather than changing the host's setting.
 
 ## Quick start
 
@@ -279,6 +285,14 @@ holds the only copy. spark1 must export the cache read-only to each worker's add
 ring, mounts through spark2's routed address). With an export whose root (`fsid=0`) holds the cache at `/huggingface`,
 `NFS_PATH=/huggingface` (the default). `scripts/prepare.sh` makes a docker volume `dsv41-hf` on each worker, mounts it
 and checks that every file a rank reads is there, at the right size.
+
+When a worker's load crawls or stalls, look at its path to spark1 first; these came from a four-Spark ring in
+[#21](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/21) and were not measured
+here. The worker across the ring reaches spark1 through a neighbour, and on that hop NFS ran at 9 MB/s until
+`net.ipv4.conf.all.send_redirects=0` on spark1, then 39 MB/s against 590 MB/s of raw TCP. A worker that reaches spark1
+over a management network can be given its fabric address with `FABRIC_PEER2` / `FABRIC_PEER3`. `MASTER_ADDR` is derived
+from this Spark's own addresses and passes over a Tailscale one (`100.64.0.0/10`) unless it has no other; set it
+yourself if the workers reach spark1 elsewhere.
 
 ## Engram's packed rows (opt-in)
 
@@ -412,6 +426,22 @@ On one four-GB10 switchless-ring deployment (2026-10-26), Container idle CPU fel
 full feature matrix. A repeated A/B/A/B recheck with 60-second cgroup CPU windows confirmed the reduction
 ([measurements](docs/idle-cpu-validation.md)). Shared-circuit wall-power readings were noisy and incomplete; no isolated watts-saved
 claim is made. Rebuild and replace all four images; weight conversion is not required for this patch.
+
+### Pinning the RDMA proxies
+
+`TF_DS_RDMA_CPUS=a,b,c` pins the three RDMA proxy threads to one CPU each, in the order four-node ring, column pair, row
+pair. Unset, the scheduler places them. The main thread is not affected. `start.sh` forwards every exported `TF_DS_*`
+variable to all ranks, so `export TF_DS_RDMA_CPUS=0,10,11` in `scripts/local.sh` is enough. While decoding the proxies
+still busy-poll, and a polling thread does not need a fast core: on a GB10, CPUs 0-4 and 10-14 are Cortex-A725
+(2.8 GHz) and 5-9 and 15-19 are Cortex-X925 (3.9 GHz).
+
+Check the value yourself: a CPU that does not exist or a word that is not a number leaves that proxy unpinned, with no
+message. `taskset -pc <tid>` on the proxy threads shows the result.
+
+[making](https://github.com/making) reports (four GB10 on a ring, one ~5,600-token decode, TSOC at the end of each
+phase) 59-67 °C with `0,10,11` against 70-81 °C unpinned, with no throughput change outside the drift from the growing
+context ([#40](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/40)). Only that one
+layout was tried and this repository has not measured it, so the default stays unpinned.
 
 ## Cached-image and late-request latency
 

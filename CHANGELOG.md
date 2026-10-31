@@ -1,5 +1,12 @@
 # Changelog
 
+- **2026-11-01** -- README notes from three issues, none of them changing a default: `TF_DS_RDMA_CPUS` and the GB10's
+  core layout ([making](https://github.com/making), [#40](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/40));
+  what `__vm_enough_memory` in `dmesg` means ([#36](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/36));
+  a worker's NFS path across the ring ([n1ur0](https://github.com/n1ur0), [#21](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/21)).
+- **2026-11-01** -- `MASTER_ADDR` is derived from a Tailscale address (`100.64.0.0/10`) only when the Spark has no other
+  ([n1ur0](https://github.com/n1ur0), [#21](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/21)).
+  `worker_nfs` runs on the runtime image too, the last utility left on `BASE_IMAGE` after Tyler Folkman's change below.
 - **2026-10-29** -- (SvangenStudios) `scripts/prepare.sh` stops when it cannot compute a node's weight-file index
   instead of deleting that node's weight file. The index was hashed inside the container's own `bash -c`, which the
   script's `pipefail` does not reach, so a failed `tf-dsv41-rank-cache --index-only` (a missing or unreadable shard)
