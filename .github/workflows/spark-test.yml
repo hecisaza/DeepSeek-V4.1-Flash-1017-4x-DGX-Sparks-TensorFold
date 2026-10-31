@@ -69,20 +69,31 @@ jobs:
           if [[ "$PR_INPUT" =~ ^https://github\.com/([^/]+/[^/]+)/pull/([0-9]+) ]]; then PR_REPO=${BASH_REMATCH[1]}; PR=${BASH_REMATCH[2]}
           else PR_REPO=$THIS_REPO; PR=$PR_INPUT; fi
           { echo "PR_REPO=$PR_REPO"; echo "PR=$PR"
-            gh pr view "$PR" -R "$PR_REPO" --json headRefOid,baseRefOid,headRefName,baseRefName,isCrossRepository,url \
-              --jq '"HEAD_SHA=\(.headRefOid)\nBASE_SHA=\(.baseRefOid)\nHEAD_REF=\(.headRefName)\nBASE_REF=\(.baseRefName)\nPR_URL=\(.url)\nCROSS=\(.isCrossRepository)"'
+            gh pr view "$PR" -R "$PR_REPO" --json headRefOid,baseRefOid,headRefName,baseRefName,isCrossRepository,url,mergeable,potentialMergeCommit \
+              --jq '"HEAD_SHA=\(.headRefOid)\nBASE_SHA=\(.baseRefOid)\nHEAD_REF=\(.headRefName)\nBASE_REF=\(.baseRefName)\nPR_URL=\(.url)\nCROSS=\(.isCrossRepository)\nMERGEABLE=\(.mergeable)\nMERGE_SHA=\(.potentialMergeCommit.oid // "")"'
           } | tee -a "$GITHUB_ENV"
           # evidence goes to the PR branch only when that branch lives in this repository
           if [ "$PR_REPO" = "$THIS_REPO" ] && grep -q "^CROSS=false" "$GITHUB_ENV"; then echo "EVIDENCE_REF=$(grep ^HEAD_REF= "$GITHUB_ENV" | tail -1 | cut -d= -f2-)" >> "$GITHUB_ENV"
           else echo "EVIDENCE_REF=evidence/$(tr / - <<<"$PR_REPO")-pr-$PR" >> "$GITHUB_ENV"; fi
 
-      - name: Checkout the PR head and its base
+      - name: Checkout the candidate (the PR merged onto its current base) and the base
         run: |
           find . -mindepth 1 -delete; rm -rf ../base
-          git init -q . && git fetch -q "https://github.com/$PR_REPO.git" "refs/pull/$PR/head" "$BASE_SHA"
-          git checkout -q "$HEAD_SHA"
+          git init -q .
+          if [ -n "$MERGE_SHA" ]; then
+            # the candidate is GitHub's test merge of the PR onto the current base: exactly the PR's change on today's main
+            git fetch -q "https://github.com/$PR_REPO.git" "refs/pull/$PR/merge" "refs/pull/$PR/head" "$BASE_SHA"
+            CAND_SHA=$MERGE_SHA; CAND_KIND="merged onto the current base"
+          else
+            # no clean merge: the head against the commit it branched from, so the difference is still the PR's change alone
+            git fetch -q "https://github.com/$PR_REPO.git" "refs/pull/$PR/head:refs/remotes/pr/head" "refs/heads/$BASE_REF:refs/remotes/pr/base"
+            BASE_SHA=$(git merge-base refs/remotes/pr/head refs/remotes/pr/base); CAND_SHA=$HEAD_SHA
+            CAND_KIND="head against its merge-base ${BASE_SHA::8} (the PR does not merge cleanly onto the current base)"
+          fi
+          { echo "CAND_SHA=$CAND_SHA"; echo "BASE_SHA=$BASE_SHA"; echo "CAND_KIND=$CAND_KIND"; } >> "$GITHUB_ENV"
+          git checkout -q "$CAND_SHA"
           mkdir -p ../base && git archive "$BASE_SHA" | tar -x -C ../base
-          echo "PR $PR_URL: head ${HEAD_SHA::8} ($HEAD_REF), base ${BASE_SHA::8} ($BASE_REF)"
+          echo "PR $PR_URL: head ${HEAD_SHA::8} ($HEAD_REF) $CAND_KIND; candidate ${CAND_SHA::8}, base ${BASE_SHA::8} ($BASE_REF)"
 
       - name: Upstream state (stage 0, on the repository the PR belongs to)
         run: |
@@ -91,7 +102,7 @@ jobs:
       - name: Build the PR and its base on the build host and ship both images to every Spark
         id: build
         run: |
-          IMAGE="tensorfold-dsv41:pr-${HEAD_SHA::8}"; BASE_IMAGE="tensorfold-dsv41:base-${BASE_SHA::8}"
+          IMAGE="tensorfold-dsv41:pr-${CAND_SHA::8}"; BASE_IMAGE="tensorfold-dsv41:base-${BASE_SHA::8}"
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"; echo "BASE_IMAGE=$BASE_IMAGE" >> "$GITHUB_ENV"
           # the base (main without the PR) is the control; the lab's local.sh goes to both checkouts without its engine
           # settings (TF_* lines), so the PR's defaults and the base's defaults are what runs
@@ -126,7 +137,7 @@ jobs:
         run: |
           RUN=$(ls -t runs 2>/dev/null | head -1); [ -n "$RUN" ] || exit 0
           gh pr view "$PR" -R "$PR_REPO" --json title,body --jq '"\(.title)\n\n\(.body)"' > pr.md || true
-          "$KIT/scripts/evidence-review.sh" "runs/$RUN" --checkout . --base "$BASE_SHA" --head "$HEAD_SHA" --pr-url "$PR_URL" --pr-file pr.md --timeout 25 || true
+          "$KIT/scripts/evidence-review.sh" "runs/$RUN" --checkout . --base "$BASE_SHA" --head "$CAND_SHA" --pr-url "$PR_URL" --pr-file pr.md --timeout 25 || true
 
       - name: Merge readiness (computed from the results, the second opinion and the open PRs; a person merges)
         if: always() && steps.test.outcome != 'skipped'
@@ -145,6 +156,7 @@ jobs:
         run: |
           RUN=$(ls -t runs 2>/dev/null | head -1); [ -n "$RUN" ] || exit 0
           echo "RUN=$RUN" >> "$GITHUB_ENV"
+          git checkout -q --detach "$HEAD_SHA" 2>/dev/null || true   # the evidence commit sits on the PR head, not on the test merge
           mkdir -p "docs/evidence/$RUN"
           cp "runs/$RUN/report.md" "runs/$RUN/report.html" "docs/evidence/$RUN/" 2>/dev/null || true
           cp runs/"$RUN"/*.svg "docs/evidence/$RUN/" 2>/dev/null || true
@@ -164,7 +176,7 @@ jobs:
           STATUS="${{ steps.test.outcome }}"
           [ "${{ steps.build.outcome }}" = failure ] && STATUS="build failed (nothing was tested)"
           {
-            echo "**Automated test run** on the lab's Sparks: $PR_URL, \`${HEAD_SHA::8}\` against its base \`${BASE_SHA::8}\`, suites ${SUITES_RUN:-$SUITES}: **$STATUS** (job [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}))"
+            echo "**Automated test run** on the lab's Sparks: $PR_URL, \`${HEAD_SHA::8}\` ${CAND_KIND:-against its base} vs base \`${BASE_SHA::8}\`, suites ${SUITES_RUN:-$SUITES}: **$STATUS** (job [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}))"
             echo
             if [ -n "$RUN" ] && [ -s "runs/$RUN/VERDICT.md" ]; then cat "runs/$RUN/VERDICT.md"; echo; fi
             if [ -n "$RUN" ] && [ -f "runs/$RUN/report.md" ]; then sed -n '1,200p' "runs/$RUN/report.md"; else echo "_no report was produced; see the job log_"; fi
