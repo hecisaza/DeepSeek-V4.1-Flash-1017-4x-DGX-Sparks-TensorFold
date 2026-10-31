@@ -1,0 +1,40 @@
+# sync-upstream: keep this fork's main current with the repository it was forked from, so pull requests here are
+# tested against the latest upstream main. A merge commit keeps the fork's own files (these workflows). Runs daily and
+# on demand; a conflict fails the job and leaves main untouched. (GitHub disables scheduled workflows on a fork until
+# they are enabled once in the Actions tab; "Run workflow" works regardless.)
+name: sync-upstream
+
+on:
+  schedule:
+    - cron: "17 9 * * *"   # daily, 09:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Merge the upstream default branch into main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          UP=$(gh repo view "${{ github.repository }}" --json parent --jq '.parent | select(. != null) | "\(.owner.login)/\(.name)"')
+          [ -n "$UP" ] || { echo "this repository is not a fork; nothing to sync"; exit 1; }
+          UPBR=$(gh repo view "$UP" --json defaultBranchRef --jq .defaultBranchRef.name)
+          git remote add upstream "https://github.com/$UP.git"
+          git fetch -q upstream "$UPBR"
+          behind=$(git rev-list --count "HEAD..upstream/$UPBR")
+          echo "upstream $UP/$UPBR: $behind commit(s) not yet in main"
+          [ "$behind" -gt 0 ] || { echo "main is current with $UP/$UPBR" >> "$GITHUB_STEP_SUMMARY"; exit 0; }
+          git config user.name "hecisaza"
+          git config user.email "76170012+hecisaza@users.noreply.github.com"
+          git merge --no-edit "upstream/$UPBR"
+          git push origin HEAD:main
+          { echo "merged $behind commit(s) from $UP/$UPBR into main:"; git log --oneline "HEAD~1..upstream/$UPBR" | sed 's/^/- /'; } >> "$GITHUB_STEP_SUMMARY"

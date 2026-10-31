@@ -18,7 +18,7 @@ on:
         required: true
         type: string
       suites:
-        description: "suites to run (default: the SUITES variable, else smoke,boundary,cutin,soak)"
+        description: "suites to run (default: the SUITES variable, else smoke,boundary,cutin,perf,soak)"
         required: false
         type: string
       reps:
@@ -61,7 +61,7 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       THIS_REPO: ${{ github.repository }}
       PR_INPUT: ${{ inputs.pr || github.event.pull_request.number }}
-      SUITES: ${{ inputs.suites || vars.SUITES || 'smoke,boundary,cutin,soak' }}
+      SUITES: ${{ inputs.suites || vars.SUITES || 'smoke,boundary,cutin,perf,soak' }}
       REPS: ${{ inputs.reps || vars.REPS || '1' }}
     steps:
       - name: Resolve the pull request
@@ -84,9 +84,9 @@ jobs:
           mkdir -p ../base && git archive "$BASE_SHA" | tar -x -C ../base
           echo "PR $PR_URL: head ${HEAD_SHA::8} ($HEAD_REF), base ${BASE_SHA::8} ($BASE_REF)"
 
-      - name: Upstream state (stage 0)
+      - name: Upstream state (stage 0, on the repository the PR belongs to)
         run: |
-          "$KIT/scripts/sync.sh" "$THIS_REPO" | tee sync.txt
+          "$KIT/scripts/sync.sh" "$PR_REPO" | tee sync.txt
 
       - name: Build the PR and its base on the build host and ship both images to every Spark
         id: build
@@ -128,6 +128,18 @@ jobs:
           gh pr view "$PR" -R "$PR_REPO" --json title,body --jq '"\(.title)\n\n\(.body)"' > pr.md || true
           "$KIT/scripts/evidence-review.sh" "runs/$RUN" --checkout . --base "$BASE_SHA" --head "$HEAD_SHA" --pr-url "$PR_URL" --pr-file pr.md --timeout 25 || true
 
+      - name: Merge readiness (computed from the results, the second opinion and the open PRs; a person merges)
+        if: always() && steps.test.outcome != 'skipped'
+        run: |
+          RUN=$(ls -t runs 2>/dev/null | head -1); [ -n "$RUN" ] || exit 0
+          "$KIT/scripts/verdict.py" "runs/$RUN" --review "runs/$RUN/REVIEW.md" --sync sync.txt --pr "$PR" || true
+          # the class as a label, on PRs of this repository only
+          if [ "$PR_REPO" = "$THIS_REPO" ] && [ -s "runs/$RUN/verdict.json" ]; then
+            L=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['label'])" "runs/$RUN/verdict.json")
+            for x in evidence:ready evidence:unverified evidence:blocked evidence:rerun; do [ "$x" = "$L" ] || gh pr edit "$PR" -R "$THIS_REPO" --remove-label "$x" >/dev/null 2>&1 || true; done
+            gh pr edit "$PR" -R "$THIS_REPO" --add-label "$L" >/dev/null 2>&1 || true
+          fi
+
       - name: Evidence to the PR branch (or an evidence/ branch here for a PR elsewhere)
         if: always()
         run: |
@@ -136,7 +148,7 @@ jobs:
           mkdir -p "docs/evidence/$RUN"
           cp "runs/$RUN/report.md" "runs/$RUN/report.html" "docs/evidence/$RUN/" 2>/dev/null || true
           cp runs/"$RUN"/*.svg "docs/evidence/$RUN/" 2>/dev/null || true
-          cp "runs/$RUN/REVIEW.md" "docs/evidence/$RUN/" 2>/dev/null || true
+          cp "runs/$RUN/REVIEW.md" "runs/$RUN/VERDICT.md" "docs/evidence/$RUN/" 2>/dev/null || true
           git config user.name "hecisaza"
           git config user.email "76170012+hecisaza@users.noreply.github.com"
           git add docs/evidence
@@ -154,6 +166,7 @@ jobs:
           {
             echo "**Automated test run** on the lab's Sparks: $PR_URL, \`${HEAD_SHA::8}\` against its base \`${BASE_SHA::8}\`, suites ${SUITES_RUN:-$SUITES}: **$STATUS** (job [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}))"
             echo
+            if [ -n "$RUN" ] && [ -s "runs/$RUN/VERDICT.md" ]; then cat "runs/$RUN/VERDICT.md"; echo; fi
             if [ -n "$RUN" ] && [ -f "runs/$RUN/report.md" ]; then sed -n '1,200p' "runs/$RUN/report.md"; else echo "_no report was produced; see the job log_"; fi
             echo
             if [ -n "$RUN" ] && [ -s "runs/$RUN/REVIEW.md" ]; then
@@ -178,6 +191,8 @@ jobs:
             runs/*/*.svg
             runs/*/REVIEW.md
             runs/*/review-missing.txt
+            runs/*/VERDICT.md
+            runs/*/verdict.json
             runs/*/log.txt
           if-no-files-found: ignore
 
