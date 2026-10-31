@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 150" width="640" height="150" font-family="ui-sans-serif,system-ui" font-size="12">
+<rect width="640" height="150" fill="#ffffff"/>
+<text x="12" y="24" font-weight="600" fill="#16202A">Cut-in: seconds to first token, a short question 3 s behind a cold long prompt</text>
+<text x="12" y="49" fill="#5B6B7A">pr rep 0 · short question</text>
+<rect x="230" y="38" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="38" width="282.5" height="14" fill="#0F766E"/>
+<text x="628" y="49" text-anchor="end" fill="#16202A">17.02 s</text>
+<text x="12" y="75" fill="#5B6B7A">pr rep 0 · long prompt</text>
+<rect x="230" y="64" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="64" width="327.3" height="14" fill="#8FB3AE"/>
+<text x="628" y="75" text-anchor="end" fill="#16202A">19.72 s</text>
+<text x="12" y="101" fill="#5B6B7A">base rep 0 · short question</text>
+<rect x="230" y="90" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="90" width="282.2" height="14" fill="#8FB3AE"/>
+<text x="628" y="101" text-anchor="end" fill="#16202A">17.0 s</text>
+<text x="12" y="127" fill="#5B6B7A">base rep 0 · long prompt</text>
+<rect x="230" y="116" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="116" width="328.0" height="14" fill="#8FB3AE"/>
+<text x="628" y="127" text-anchor="end" fill="#16202A">19.76 s</text>
+</svg>
