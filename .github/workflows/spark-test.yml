@@ -144,7 +144,7 @@ jobs:
             echo "claim test found on main: claims/$SLUG-pr-$PR.sh"; R=claim.sh
           else rm -f claim.sh; fi
           echo "claim=$([ "$R" = claim.sh ] && echo yes || echo none)" >> "$GITHUB_OUTPUT"
-          if [ -n "$R" ]; then OPTS=(--opt "repro_cmd=bash $R {api} {model}"); case ",$S," in *,repro,*) ;; *) S="$S,repro";; esac; fi
+          if [ -n "$R" ]; then OPTS=(--opt "repro_cmd=bash $R {api} {model} {logcmd}"); case ",$S," in *,repro,*) ;; *) S="$S,repro";; esac; fi
           echo "SUITES_RUN=$S" >> "$GITHUB_ENV"
           "$KIT/scripts/pairtest" run --lab lab.run.yaml --target pr --compare base --suite "$S" --runs runs --opt "reps=$REPS" "${OPTS[@]}"
 
@@ -152,6 +152,14 @@ jobs:
         if: always()
         run: |
           "$KIT/scripts/pairtest" restore --lab lab.run.yaml
+
+      - name: The pull request's own tests, on the PR and on the base with the PR's tests (no lab)
+        if: always() && steps.test.outcome != 'skipped'
+        timeout-minutes: 20
+        run: |
+          RUN=$(ls -t runs 2>/dev/null | head -1); [ -n "$RUN" ] || exit 0
+          "$KIT/scripts/hosttests.sh" --pr . --base ../base --out "runs/$RUN/hosttests.json" | tee -a "$GITHUB_STEP_SUMMARY"
+          python3 "$KIT/scripts/report.py" "runs/$RUN" >/dev/null   # the report now carries the host-tests section
 
       - name: Second opinion on the evidence (a different model, read-only; never fails the run)
         if: always() && steps.test.outcome != 'skipped'
@@ -234,6 +242,7 @@ jobs:
             runs/*/verdict.json
             runs/*/review/pr.patch
             runs/*/review/PR.md
+            runs/*/hosttests.json
           if-no-files-found: ignore
 
       - name: Remove older PR and base images from the Sparks
