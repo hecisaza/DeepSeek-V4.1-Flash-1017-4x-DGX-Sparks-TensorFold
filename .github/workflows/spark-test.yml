@@ -69,6 +69,7 @@ jobs:
       pr_repo: ${{ steps.verdict.outputs.pr_repo }}
       pr: ${{ steps.verdict.outputs.pr }}
       suites: ${{ steps.verdict.outputs.suites }}
+      reps: ${{ steps.verdict.outputs.reps }}
     # no concurrency group: the one runner with the spark-lab label runs one job at a time, and GitHub keeps every job
     # queued until it is free (a concurrency group keeps only one pending run and cancels the others)
     env:
@@ -165,9 +166,9 @@ jobs:
         if: always() && steps.test.outcome != 'skipped'
         run: |
           RUN=$(ls -t runs 2>/dev/null | head -1); [ -n "$RUN" ] || exit 0
-          "$KIT/scripts/verdict.py" "runs/$RUN" --review "runs/$RUN/REVIEW.md" --sync sync.txt --pr "$PR" || true
+          "$KIT/scripts/verdict.py" "runs/$RUN" --review "runs/$RUN/REVIEW.md" --sync sync.txt --pr "$PR" --pr-file pr.md || true
           CLS=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['class'])" "runs/$RUN/verdict.json" 2>/dev/null || echo "")
-          { echo "verdict=$CLS"; echo "pr_url=$PR_URL"; echo "pr_repo=$PR_REPO"; echo "pr=$PR"; echo "suites=$SUITES"; } >> "$GITHUB_OUTPUT"
+          { echo "verdict=$CLS"; echo "pr_url=$PR_URL"; echo "pr_repo=$PR_REPO"; echo "pr=$PR"; echo "suites=$SUITES"; echo "reps=$REPS"; } >> "$GITHUB_OUTPUT"
           # the class as a label, on PRs of this repository only
           if [ "$PR_REPO" = "$THIS_REPO" ] && [ -s "runs/$RUN/verdict.json" ]; then
             L=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['label'])" "runs/$RUN/verdict.json")
@@ -222,8 +223,10 @@ jobs:
           name: spark-test-${{ github.run_id }}
           path: |
             comment.md
+            claim.sh
             runs/*/report.md
             runs/*/report.html
+            runs/*/results.json
             runs/*/*.svg
             runs/*/REVIEW.md
             runs/*/review-missing.txt
@@ -231,7 +234,6 @@ jobs:
             runs/*/verdict.json
             runs/*/review/pr.patch
             runs/*/review/PR.md
-            runs/*/log.txt
           if-no-files-found: ignore
 
       - name: Remove older PR and base images from the Sparks
@@ -245,7 +247,7 @@ jobs:
     # SAFE, UNVERIFIED on the first attempt: an agent writes the claim test the suites lacked, it must fail on the base,
     # it is committed under claims/ on main and the pipeline reruns this PR with it (attempt 2, the cap: no loop)
     needs: test
-    if: always() && needs.test.result == 'success' && needs.test.outputs.verdict == 'SAFE, UNVERIFIED' && needs.test.outputs.claim == 'none' && (inputs.attempt || '1') != '2'
+    if: always() && needs.test.result == 'success' && needs.test.outputs.verdict == 'SAFE, UNVERIFIED' && needs.test.outputs.claim == 'none' && (inputs.attempt || '1') == '1'
     runs-on: [self-hosted, spark-lab]
     timeout-minutes: 90
     env:
@@ -258,6 +260,7 @@ jobs:
       PR_REPO: ${{ needs.test.outputs.pr_repo }}
       PR: ${{ needs.test.outputs.pr }}
       SUITES: ${{ needs.test.outputs.suites }}
+      REPS: ${{ needs.test.outputs.reps }}
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -290,5 +293,5 @@ jobs:
           git -C fork add claims
           git -C fork commit -q -m "claims: $SLUG-pr-$PR.sh, the claim test written by the verify step for $PR_URL"
           git -C fork push -q origin HEAD:main
-          gh workflow run spark-test.yml -R "$THIS_REPO" -f "pr=$PR_URL" -f "attempt=2" ${SUITES:+-f "suites=$SUITES"}
+          gh workflow run spark-test.yml -R "$THIS_REPO" -f "pr=$PR_URL" -f "attempt=2" ${SUITES:+-f "suites=$SUITES"} ${REPS:+-f "reps=$REPS"}
           echo "claim committed as claims/$SLUG-pr-$PR.sh; attempt 2 dispatched" >> "$GITHUB_STEP_SUMMARY"
