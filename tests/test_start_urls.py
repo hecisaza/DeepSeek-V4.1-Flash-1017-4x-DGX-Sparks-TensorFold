@@ -27,7 +27,7 @@ class _IPv6Server(http.server.ThreadingHTTPServer):
 
 @unittest.skipUnless(_FIXTURE["BASH"] and _CURL, "needs bash 4+ and curl")
 class StartURLs(unittest.TestCase):
-    def check_host(self, host, hostname="10.0.0.1"):
+    def check_host(self, host, hostname="10.0.0.1", display=None):
         hits = []
 
         class Handler(http.server.BaseHTTPRequestHandler):
@@ -129,7 +129,7 @@ class StartURLs(unittest.TestCase):
             self.assertIn(f"http://{probe_authority}:{port}/v1/models", curl_log)
             self.assertIn(f"http://{probe_authority}:{port}/v1/chat/completions", curl_log)
 
-            display_host = hostname if host in ["0.0.0.0", "::"] else host
+            display_host = display or (hostname if host in ["0.0.0.0", "::"] else host)
             display_authority = f"[{display_host}]" if ":" in display_host else display_host
             self.assertIn(f"API      http://{display_authority}:{port}/v1", out)
 
@@ -160,10 +160,15 @@ class StartURLs(unittest.TestCase):
     def test_ipv6_wildcard_probes_ipv4_loopback(self):
         self.check_host("::")
 
-    def test_wildcard_with_ipv6_hostname_formats_display_url(self):
-        for host in ["0.0.0.0", "::"]:
-            with self.subTest(host=host):
-                self.check_host(host, hostname="::1")
+    def test_ipv6_wildcard_with_ipv6_hostname_formats_display_url(self):
+        self.check_host("::", hostname="::1")
+
+    def test_ipv4_wildcard_prints_an_ipv4_address(self):
+        # HOST=0.0.0.0 binds IPv4 only (the engine's listener): an IPv6 address listed first would refuse connections
+        self.check_host("0.0.0.0", hostname="2001:db8::1 192.0.2.7", display="192.0.2.7")
+
+    def test_ipv4_wildcard_with_only_ipv6_prints_the_placeholder(self):
+        self.check_host("0.0.0.0", hostname="::1", display="<spark-address>")
 
 
 if __name__ == "__main__":

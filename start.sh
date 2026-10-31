@@ -227,8 +227,10 @@ print(repr(c[:40]) + ",", r["usage"]["completion_tokens"], "tokens")' 2>/dev/nul
 else
   fail "the smoke test request failed (an HTTP error, an error reply, no reply text, or one character repeated); the ranks are still running"
 fi
-IP=$(hostname -I 2>/dev/null | awk '{print $1}')
-[[ "$HOST" == 0.0.0.0 || "$HOST" == "::" ]] || IP="$HOST"
+# the address to print: HOST itself, or for a wildcard one of this Spark's own (0.0.0.0 binds IPv4 only: an IPv4 one)
+if [[ "$HOST" == 0.0.0.0 ]]; then IP=$(hostname -I 2>/dev/null | tr ' ' '\n' | awk 'NF && !/:/ {print; exit}')
+elif [[ "$HOST" == "::" ]]; then IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+else IP="$HOST"; fi
 [[ "$IP" != *:* ]] || IP="[$IP]"
 printf '\n%s  ✔ %s is now LIVE! on port %s%s\n\n' "$G" "$SERVED_NAME" "$PORT" "$R"
 cat <<EOF
