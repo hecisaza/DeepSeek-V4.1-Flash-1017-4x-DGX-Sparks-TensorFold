@@ -49,8 +49,9 @@ on:
         default: true
 
 permissions:
-  contents: write        # evidence commits
-  pull-requests: write   # the automated comment
+  contents: write        # evidence commits, claims/
+  pull-requests: write   # the automated comment, the evidence: label
+  actions: write         # the verify job dispatches attempt 2
 
 jobs:
   test:
