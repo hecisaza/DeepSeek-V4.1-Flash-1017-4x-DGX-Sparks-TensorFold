@@ -70,6 +70,7 @@ jobs:
       pr: ${{ steps.verdict.outputs.pr }}
       suites: ${{ steps.verdict.outputs.suites }}
       reps: ${{ steps.verdict.outputs.reps }}
+      claim_audit: ${{ steps.verdict.outputs.claim_audit }}
     # no concurrency group: the one runner with the spark-lab label runs one job at a time, and GitHub keeps every job
     # queued until it is free (a concurrency group keeps only one pending run and cancels the others)
     env:
@@ -202,7 +203,8 @@ jobs:
             "$KIT/scripts/verdict.py" "runs/$r" --review "runs/$r/REVIEW.md" --sync sync.txt --pr "$PR" --pr-file pr.md --noise "$KIT/lab.noise.json" --manifest "runs/$r/run-manifest.json" || true
           done
           CLS=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['class'])" "runs/$RUN/verdict.json" 2>/dev/null || echo "")
-          { echo "verdict=$CLS"; echo "pr_url=$PR_URL"; echo "pr_repo=$PR_REPO"; echo "pr=$PR"; echo "suites=$SUITES"; echo "reps=$REPS"; } >> "$GITHUB_OUTPUT"
+          AUDIT=$(grep -oE "CLAIM TEST: (SOUND|UNSOUND|NONE)[^\n]{0,300}" "runs/$RUN/REVIEW.md" 2>/dev/null | tail -1 || true)
+          { echo "verdict=$CLS"; echo "pr_url=$PR_URL"; echo "pr_repo=$PR_REPO"; echo "pr=$PR"; echo "suites=$SUITES"; echo "reps=$REPS"; echo "claim_audit=$(tr -d '\n' <<<"$AUDIT" | cut -c1-300)"; } >> "$GITHUB_OUTPUT"
           # the class as a label, on PRs of this repository only
           if [ "$PR_REPO" = "$THIS_REPO" ] && [ -s "runs/$RUN/verdict.json" ]; then
             L=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['label'])" "runs/$RUN/verdict.json")
@@ -288,7 +290,7 @@ jobs:
     # SAFE, UNVERIFIED on the first attempt: an agent writes the claim test the suites lacked, it must fail on the base,
     # it is committed under claims/ on main and the pipeline reruns this PR with it (attempt 2, the cap: no loop)
     needs: test
-    if: always() && needs.test.result == 'success' && needs.test.outputs.verdict == 'SAFE, UNVERIFIED' && needs.test.outputs.claim == 'none' && (inputs.attempt || '1') == '1'
+    if: always() && needs.test.result == 'success' && (needs.test.outputs.verdict == 'SAFE, UNVERIFIED' || needs.test.outputs.verdict == 'RERUN') && (needs.test.outputs.claim == 'none' || contains(needs.test.outputs.claim_audit, 'UNSOUND')) && (inputs.attempt || '1') == '1'
     runs-on: [self-hosted, spark-lab]
     timeout-minutes: 90
     env:
@@ -302,6 +304,7 @@ jobs:
       PR: ${{ needs.test.outputs.pr }}
       SUITES: ${{ needs.test.outputs.suites }}
       REPS: ${{ needs.test.outputs.reps }}
+      CLAIM_AUDIT: ${{ needs.test.outputs.claim_audit }}
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -312,7 +315,8 @@ jobs:
         id: claim
         run: |
           RUN=$(ls -t art/runs | head -1)
-          "$KIT/scripts/claim-agent.sh" "art/runs/$RUN" --pr-url "$PR_URL" --out claim.sh 2>&1 | tee claim-run.txt
+          PREV=(); [ -s art/claim.sh ] && [ -n "$CLAIM_AUDIT" ] && PREV=(--previous art/claim.sh --audit "$CLAIM_AUDIT")
+          "$KIT/scripts/claim-agent.sh" "art/runs/$RUN" --pr-url "$PR_URL" --out claim.sh "${PREV[@]}" 2>&1 | tee claim-run.txt
           R=$(grep -o 'RESULT: .*' claim-run.txt | tail -1); echo "verify: ${R:-no result}" >> "$GITHUB_STEP_SUMMARY"
           case "$R" in "RESULT: claim "*) echo "ok=yes" >> "$GITHUB_OUTPUT";; *) echo "ok=no" >> "$GITHUB_OUTPUT";; esac
 
