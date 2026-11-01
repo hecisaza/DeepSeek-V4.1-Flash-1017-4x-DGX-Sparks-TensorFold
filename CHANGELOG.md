@@ -1,5 +1,92 @@
 # Changelog
 
+- **2026-11-01** -- README notes from three issues, none of them changing a default: `TF_DS_RDMA_CPUS` and the GB10's
+  core layout ([making](https://github.com/making), [#40](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/40));
+  what `__vm_enough_memory` in `dmesg` means ([#36](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/36));
+  a worker's NFS path across the ring ([n1ur0](https://github.com/n1ur0), [#21](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/21)).
+- **2026-11-01** -- `MASTER_ADDR` is derived from a Tailscale address (`100.64.0.0/10`) only when the Spark has no other
+  ([n1ur0](https://github.com/n1ur0), [#21](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/21)).
+  `worker_nfs` runs on the runtime image too, the last utility left on `BASE_IMAGE` after Tyler Folkman's change below.
+- **2026-10-31** -- `0037`, `NVFP4=1`: [NVIDIA's NVFP4 release](https://huggingface.co/nvidia/DeepSeek-V4.1-Flash-1017-NVFP4)
+  of the model. Routed experts on GB10's block-scaled FP4 MMA (`mma_fp4`, Ash Hart's in TensorFold) with each expert's own
+  4-bit activations (`tf_dsn_nv_quant`, TensorFold's format), MXFP4 Engram rows decoded on the host, the DSpark stages and
+  the shared expert unchanged; weight files and GPU memory the size of DeepSeek's. `check_nvfp4.py` on real tensors:
+  weights equal the source's MXFP4 exactly, quantizer bit-exact, decode and prefill kernels within 4e-10 of fp64, row
+  bits independent of the launch. Against the FP8 image then served: prefill +4.3 to +6.2 %, decode +1.1 % at c1, +0.3 % at
+  c2, +1.7 % at c4, +3.9 % at c8, +6.4 % at c16 ([README](README.md#nvfp4-opt-in)); `tools/validate.py` all passed, 612 replies
+  equal at every concurrency.
+- **2026-10-29** -- (Tyler Folkman, tfolkman) The launcher's lock descriptors stay out of persistent children: a surviving
+  ssh or `docker logs -f` could hold `start.lock` or `prepare.lock` after its launcher exited and block the next start
+  (`tests/test_launcher_locks.py`). On a switch, NCCL's bootstrap uses a RoCE subnet every rank shares, chosen the same way
+  on all of them, instead of each node's default route; rings and triangles keep the default route, and `SOCKET_IFNAME`
+  still overrides it (`tests/test_mesh_bootstrap.py`; not run on this ring). The preparation utilities run on the
+  runtime image, so a worker holding it never pulls the build base (`tests/test_prepare_image.py`).
+- **2026-10-29** -- (SvangenStudios) `scripts/prepare.sh` stops when it cannot compute a node's weight-file index
+  instead of deleting that node's weight file. The index was hashed inside the container's own `bash -c`, which the
+  script's `pipefail` does not reach, so a failed `tf-dsv41-rank-cache --index-only` (a missing or unreadable shard)
+  hashed empty output, matched no weight file, and the loop deleted the node's good one (~80 GB) before a rebuild that
+  failed the same way. Regression tests in `tests/test_scripts.py` (`PrepareWeightFiles`).
+- **2026-10-29** -- (Christopher A. Williamson) [`docs/engram-zfs-dataset.md`](docs/engram-zfs-dataset.md): what an Engram host's ZFS dataset has
+to be set to, measured on one GB10 of this cluster -- `recordsize=4K`, `encryption=off`, `compression=off`,
+`primarycache=metadata` -- with the row counts behind each one. A pool's defaults (`recordsize=128K`, `zstd`) made every
+row read pull a whole compressed record: about 500 rows a second, and over 500 seconds to prefill a 16k-token prompt.
+The recipe itself is unchanged.
+
+- **2026-10-28** -- (shalk3) Each worker's weight file from its own disk, opt-in with `RANK_LOCAL=1`: `scripts/prepare.sh`
+  copies the ~77-81 GB file a worker reads there, and `start.sh` mounts the copy when its name, size and modification
+  time match spark1's, else that worker reads over NFS as before, with a warning. On a four-GB10 ring whose spark3
+  mounts over a 2.5 GbE LAN (the others over CX7), the engine's load fell from 315 s to 96 s and a start from
+  mains-off to serving from 417 s to 197 s; the replies are unchanged (the same file, read from another disk). The workers need the space:
+  one short of it keeps NFS. `tests/test_scripts.py` covers a matching copy, a partial one, none, and `RANK_LOCAL=0`.
+- **2026-10-28** -- (SvangenStudios) `stop.sh` reads the native server's `/health` schema: `live.connections`, the
+  requests running and waiting. It used to read `requests_running`, which this server does not publish, so it never
+  warned before cutting requests off. It takes the count only from an HTTP 200 with no `error` (an explicit `null` is
+  none); a `/health` it cannot read now warns that the open requests are unknown instead of reading as none.
+  `start.sh`'s smoke test passes only on HTTP 200 with the assistant's reply and no `error` (again, `null` is none); an
+  HTTP 500 or an error reply shaped like a completion used to end in "is now LIVE". Regression tests in
+  `tests/test_scripts.py`, `tests/test_start_smoke.py` and `tests/test_stop_health.py` (the real curl against a loopback
+  HTTP server).
+- **2026-10-29** -- (SvangenStudios) `start.sh` puts an IPv6 address in brackets in the URLs it builds: the one
+  its readiness and smoke checks call, and the API address it prints when the server is live. `HOST=::1` used to give
+  `http://::1:8888`, which curl cannot call. The engine's own `--host` stays the raw address, and `0.0.0.0` and `::`
+  still map to `127.0.0.1` for the checks. Regression tests in `tests/test_start_urls.py`.
+- **2026-10-29** -- `0039` (SvangenStudios): when a request's reply grammar could not be built at admission (xgrammar
+  compile error or out of memory), `LaneHost.setup` dropped and freed the job but returned `drop`'s `true`, so both
+  callers went on with the freed job; it now returns `false`, and a grammar built before a failed `Stream.init` is
+  freed. CPU fault-injection and lifecycle tests: 24 of 24 with the patch, 12 fault paths failing without it; live on
+  this cluster with `0040`-`0043` proposed alongside: `tools/validate.py` 8 of 8 equal, structured and tool-call
+  replies unchanged. The failure path itself was not caused on the GPU.
+- **2026-10-29** -- `0040` (SvangenStudios): once a decode or drafter graph executable enters its cache, the cache
+  keeps ownership even when its first launch fails (the local `errdefer exec.deinit()` destroyed it and left it in
+  the map: a later hit launched a destroyed handle and teardown destroyed it twice). Capture agreement, cache
+  insertion and launch order are unchanged; no retry is added. CPU tests: 20 of 20 with the patch, 6 failing without
+  it; real-GPU cache probes on four GB10 and an A/B/A run through the full TP4 model (52 requests per phase,
+  identical token IDs). Recovery from a lost CUDA context is not claimed.
+- **2026-10-29** -- `0041` (SvangenStudios): the engine's server tests (`zig test` on `zig/src/server/root.zig`)
+  compile again: two opt-in tests in `tool_grammar.zig` still called `HfText.load` with the removed template argument
+  and a removed `encodePlain` (also noted in #20). Test code only; no production code or tokenizer API changes. On
+  CPU: compile error before, 70 passed and 2 skipped (the checkpoint tests) after.
+- **2026-10-29** -- `0042` (SvangenStudios): a JSON answer (`response_format` `json_object`/`json_schema`,
+  `guided_json`, the matching `structured_outputs` form) stays JSON when the request also offers `tools`: it is no
+  longer parsed as tool calls, hidden or Harmony-post-processed; the tools stay in the prompt. On this cluster 8 of 25
+  structured and tool-call checks failed before (the JSON came back as `tool_calls`, whole replies with
+  `content: null`) and 25 of 25 pass with it; ordinary tool calls, `required`/named and the 400 for schema +
+  `required` are unchanged. CPU: 132 of 132 JSON answers preserved over 288 handler observations.
+- **2026-10-29** -- `0043` (SvangenStudios): a reply made only of DSML closing tags (the form reported in #14), with
+  tools offered, gets `tensorfold.tool_parse_warning: "orphan_dsml_closers"` (whole replies and the final SSE event)
+  and a log line with the request id. Diagnostic only: content, token IDs, usage and finish reason are unchanged, no
+  call is invented and no retry started. It does not fix #14. CPU: 42 exact warning cases and ten negatives; live:
+  no warning on 25 ordinary, JSON and tool-call replies.
+- **2026-10-28** -- `0046` (shalk3), the weight loader's read-ahead. A rank's weight file holds its tensors in the loader's
+  order and the loader read them one at a time, so every read waited on the disk: ~1 GB/s from an NVMe that reads
+  9 GB/s in parallel. Eight threads now `pread` the file in 32 MiB chunks up to 4 GiB past the loader's furthest
+  read and drop the bytes, so the loader's own reads come from the page cache; `TF_DS_LOAD_PREFETCH=0` turns it off.
+  Measured with `tf-dsv41-load` on one worker (rank 1, 81.2 GB, 1,578 tensors, the file evicted from the page cache
+  before each run): 83.4 s before, 27.2 / 27.3 / 27.4 s with it; the whole file pre-read into the page cache first
+  took 48.0 s (the cache and the landing weights compete for memory, hence the bounded lead). Every weight tensor's
+  sha256 is equal to the old loader's. On the ring: greedy replies byte-identical (3 prompts x 300 tokens) and the
+  same decode and prefill speed. Over NFS the network, not the reads, is the limit: it pays off with the weight file
+  on the worker's own disk.
 - **2026-10-28** -- `0036`, structured output and required tool calls
   ([#6](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/6)): upstream TensorFold's
   structured output (BobClawblaw's lane-core grammar and libtfgrammar, Ash Hart's required tool calls and grammar-aware

@@ -1,4 +1,5 @@
-"""Regression tests for stop.sh, ./start.sh restart, the ring's NCCL graph files under DRY_RUN=1, and the prepared marker.
+"""Regression tests for stop.sh (and its /health warning), ./start.sh restart and its smoke test, the ring's NCCL graph
+files under DRY_RUN=1, the prepared marker and prepare.sh's weight-file loop.
 
 Offline: no Spark, GPU, Docker or network. Each test copies the scripts into a temporary folder and puts fake `ssh`,
 `docker`, `curl` and `getent` first on PATH. The fake ssh runs a worker's command locally with that worker's own HOME
@@ -66,7 +67,10 @@ esac
 """
 
 FAKE_CURL = """#!/bin/sh
-echo '{"requests_running": 0}'
+# fake curl: /health answers $SIM/health if it exists, else the native server's schema with nothing open; with -w
+# its HTTP status ($SIM/health_status or 200) on the last line, as curl prints it
+if [ -e "$SIM/health" ]; then cat "$SIM/health"; else printf '%s' '{"status": "ok", "live": {"connections": 0, "waiting": 0}}'; fi
+case "$*" in *http_code*) printf '\n%s' "$(cat "$SIM/health_status" 2>/dev/null || echo 200)" ;; esac
 """
 
 FAKE_GETENT = """#!/bin/sh
@@ -275,6 +279,69 @@ class StopSh(ScriptTest):
                     self.assertEqual(self.left(h), [NAME], h)
 
 
+class StopHealth(ScriptTest):
+    """stop.sh's warning about requests it cuts off, read from the native server's /health (live.connections counts
+    the running and the waiting ones)."""
+
+    def stop_with(self, health):
+        for h in ["head", "w1", "w2", "w3"]:
+            self.containers(h, NAME)
+        if health is not None:
+            (self.sim / "health").write_text(health)
+        return self.run_script(["stop.sh"])
+
+    def test_open_requests_warn(self):
+        code, out = self.stop_with('{"status": "ok", "live": {"connections": 4, "waiting": 1}}')
+        self.assertEqual(code, 0, out)
+        self.assertIn("4 request(s) open (running or waiting) will be cut off", out)
+
+    def test_nothing_open_no_warning(self):
+        code, out = self.stop_with(None)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("cut off", out)
+
+    def test_unreadable_health_is_unknown_not_none(self):
+        cases = {"no answer": "", "an error page": "<html>401</html>", "another schema": '{"requests_running": 3}',
+                 "not a count": '{"live": {"connections": "4"}}', "a negative count": '{"live": {"connections": -1}}',
+                 "an error reply": '{"error": {"message": "unauthorized"}, "live": {"connections": 0}}'}
+        for name, body in cases.items():
+            with self.subTest(name):
+                code, out = self.stop_with(body)
+                self.assertEqual(code, 0, out)
+                self.assertIn("could not read the open requests from /health", out)
+                self.assertNoTraceback(out)
+
+    def test_http_error_is_unknown_not_none(self):
+        for status in ["500", "302", "401"]:
+            with self.subTest(status):
+                (self.sim / "health_status").write_text(status)
+                code, out = self.stop_with('{"status": "ok", "live": {"connections": 0, "waiting": 0}}')
+                self.assertEqual(code, 0, out)
+                self.assertIn("could not read the open requests from /health", out)
+
+    def test_error_null_is_no_error(self):
+        # JSON null is no error: the count is read as usual
+        code, out = self.stop_with('{"error": null, "live": {"connections": 2, "waiting": 0}}')
+        self.assertEqual(code, 0, out)
+        self.assertIn("2 request(s) open (running or waiting) will be cut off", out)
+
+    def test_other_success_status_is_unknown(self):
+        # the native server answers /health with 200; any other status, 2xx too, is not its answer
+        (self.sim / "health_status").write_text("204")
+        code, out = self.stop_with('{"live": {"connections": 0, "waiting": 0}}')
+        self.assertEqual(code, 0, out)
+        self.assertIn("could not read the open requests from /health", out)
+
+    def test_stop_health_check_holds_with_python_optimizing(self):
+        # the checks are no asserts: PYTHONOPTIMIZE would drop those
+        for h in ["head", "w1", "w2", "w3"]:
+            self.containers(h, NAME)
+        (self.sim / "health").write_text('{"live": {"connections": -1}}')
+        code, out = self.run_script(["stop.sh"], {"PYTHONOPTIMIZE": "1"})
+        self.assertEqual(code, 0, out)
+        self.assertIn("could not read the open requests from /health", out)
+
+
 class StartRestart(ScriptTest):
     """./start.sh with only what needs a Spark replaced: the links (detect_links), flock, ss, free, hostname, curl's
     answers (the server ready, the smoke test's reply) and scripts/prepare.sh (it records that it ran)."""
@@ -283,8 +350,14 @@ class StartRestart(ScriptTest):
         "ss": "#!/bin/sh\nexit 0\n",
         "free": "#!/bin/sh\necho 'Mem: 128 1 1 0 0 120'\n",
         "hostname": "#!/bin/sh\necho 10.0.0.1\n",
-        "curl": "#!/bin/sh\ncase \"$*\" in *completions*) echo '{\"choices\": [{\"message\": {\"content\": \"OK\"}}], \"usage\": {\"completion_tokens\": 1}}' ;; "
-                "*) echo '{\"requests_running\": 0}' ;; esac\n",
+        # the smoke test's reply: $SIM/smoke if it exists, else a completion; with -w its HTTP status ($SIM/smoke_status
+        # or 200) on the last line, as curl prints it
+        "curl": "#!/bin/sh\ncase \"$*\" in *completions*)\n"
+                "  if [ -e \"$SIM/smoke\" ]; then cat \"$SIM/smoke\"; else printf '%s' '{\"choices\": [{\"message\": {\"role\": \"assistant\", \"content\": \"OK\"}}], \"usage\": {\"completion_tokens\": 1}}'; fi\n"
+                "  case \"$*\" in *http_code*) printf '\\n%s' \"$(cat \"$SIM/smoke_status\" 2>/dev/null || echo 200)\" ;; esac\n"
+                "  if [ -e \"$SIM/smoke_exit\" ]; then exit \"$(cat \"$SIM/smoke_exit\")\"; fi ;;\n"
+                "*) printf '%s' '{\"status\": \"ok\", \"live\": {\"connections\": 0, \"waiting\": 0}}'\n"
+                "   case \"$*\" in *http_code*) printf '\\n200' ;; esac ;; esac\n",
     }
 
     def setUp(self):
@@ -318,6 +391,107 @@ node_order() { echo 0,1,2,3; }
         self.assertEqual(code, 0, out)
         self.assertEqual(sorted(self.launched()), ["head", "w1", "w2", "w3"], out)
         self.assertIn("is now LIVE", out)
+
+    def test_a_worker_reads_its_weight_file_from_its_disk_when_its_copy_matches(self):
+        for h in ["head", "w1", "w2", "w3"]:
+            self.containers(h, NAME)
+        code, out = self.bash('echo "@$DATA_DIR|$WORKER_RANK_DIR"')
+        data_dir, rank_dir = out.split("@")[-1].strip().split("|")
+        cache = Path(data_dir) / "rank-cache"
+        cache.mkdir(parents=True)
+        for n in range(4):
+            (cache / f"rank{n}of4-abc.bin").write_bytes(b"x" * (10 + n))
+        w2 = Path(rank_dir.replace("$HOME", str(self.sim / "home" / "w2")))
+        w2.mkdir(parents=True)
+        (w2 / "rank2of4-abc.bin").write_bytes(b"x" * 12)  # the size of this Spark's node-2 file
+        os.utime(w2 / "rank2of4-abc.bin", (1000, cache.joinpath("rank2of4-abc.bin").stat().st_mtime))
+        w3 = Path(rank_dir.replace("$HOME", str(self.sim / "home" / "w3")))
+        w3.mkdir(parents=True)
+        (w3 / "rank3of4-abc.bin").write_bytes(b"x" * 5)  # a partial copy: not used
+
+        def runs():
+            log = (self.sim / "docker.log").read_text()
+            (self.sim / "docker.log").unlink()
+            return {l.split()[0]: l for l in log.splitlines() if " docker run -d " in l}
+
+        code, out = self.run_script(["start.sh", "restart"], {"PREPARE": "0", "RANK_LOCAL": "1"})
+        self.assertEqual(code, 0, out)
+        r = runs()
+        self.assertIn(":/rank-local:ro", r["w2"], out)
+        self.assertIn(" /rank-local 2 4 ", r["w2"], out)
+        for h in ("w1", "w3"):
+            self.assertNotIn("/rank-local", r[h], out)
+        self.assertIn("rank 1 reads its weight file over NFS", out)
+        self.assertIn("rank 3 reads its weight file over NFS", out)
+        code, out = self.run_script(["start.sh", "restart"], {"PREPARE": "0", "RANK_LOCAL": "0"})
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("/rank-local", "".join(runs().values()), out)
+        self.assertNotIn("reads its weight file over NFS", out)
+        # a copy of the same name and size baked earlier than this Spark's file holds other bytes: NFS, with a warning
+        os.utime(w2 / "rank2of4-abc.bin", (1000, 1000))
+        code, out = self.run_script(["start.sh", "restart"], {"PREPARE": "0", "RANK_LOCAL": "1"})
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("/rank-local", "".join(runs().values()), out)
+        self.assertIn("rank 2 reads its weight file over NFS", out)
+        # off by default: no copies, no warnings
+        code, out = self.run_script(["start.sh", "restart"], {"PREPARE": "0"})
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("/rank-local", "".join(runs().values()), out)
+        self.assertNotIn("reads its weight file over NFS", out)
+        code, out = self.run_script(["start.sh", "restart"], {"PREPARE": "0", "RANK_LOCAL": "yes"})
+        self.assertNotEqual(code, 0, out)
+        self.assertIn("RANK_LOCAL is 0 or 1", out)
+
+    def test_smoke_test_needs_a_real_completion(self):
+        ok_body = '{"choices": [{"message": {"role": "assistant", "content": "OK"}}], "usage": {"completion_tokens": 1}}'
+        cases = {"HTTP 500 with a completion's body": (ok_body, "500"),
+                 "HTTP 200 with an error object": ('{"error": {"message": "boom"}, "choices": [{"message": {"role": "assistant", "content": "OK"}}], "usage": {"completion_tokens": 1}}', "200"),
+                 "HTTP 200 without reply text": ('{"choices": [{"message": {"role": "assistant", "content": ""}}], "usage": {"completion_tokens": 0}}', "200"),
+                 "HTTP 200 with an empty error object": ('{"error": {}, "choices": [{"message": {"role": "assistant", "content": "OK"}}], "usage": {"completion_tokens": 1}}', "200"),
+                 "HTTP 200, not the assistant's": ('{"choices": [{"message": {"role": "user", "content": "OK"}}], "usage": {"completion_tokens": 1}}', "200"),
+                 "HTTP 200, then curl fails (a timeout)": (ok_body, "200", "28")}
+        for name, (body, status, *exit_) in cases.items():
+            with self.subTest(name):
+                (self.sim / "smoke").write_text(body)
+                (self.sim / "smoke_status").write_text(status)
+                if exit_:
+                    (self.sim / "smoke_exit").write_text(exit_[0])
+                else:
+                    (self.sim / "smoke_exit").unlink(missing_ok=True)
+                code, out = self.run_script(["start.sh"], {"PREPARE": "0"})
+                self.assertNotEqual(code, 0, out)
+                self.assertIn("the smoke test request failed", out)
+                self.assertNotIn("is now LIVE", out)
+                for h in ["head", "w1", "w2", "w3"]:
+                    self.containers(h)
+
+    def test_smoke_test_error_null_passes_other_2xx_fails(self):
+        ok = '{"error": null, "choices": [{"message": {"role": "assistant", "content": "OK"}}], "usage": {"completion_tokens": 1}}'
+        (self.sim / "smoke").write_text(ok)
+        code, out = self.run_script(["start.sh"], {"PREPARE": "0"})
+        self.assertEqual(code, 0, out)
+        self.assertIn("is now LIVE", out)
+        for h in ["head", "w1", "w2", "w3"]:
+            self.containers(h)
+        (self.sim / "smoke_status").write_text("201")
+        code, out = self.run_script(["start.sh"], {"PREPARE": "0"})
+        self.assertNotEqual(code, 0, out)
+        self.assertIn("the smoke test request failed", out)
+        self.assertNotIn("is now LIVE", out)
+
+    def test_smoke_test_passes_without_a_role_and_with_python_optimizing(self):
+        # a reply whose message has no "role" is the assistant's; the checks are no asserts (PYTHONOPTIMIZE drops those)
+        (self.sim / "smoke").write_text('{"choices": [{"message": {"content": "OK"}}], "usage": {"completion_tokens": 1}}')
+        code, out = self.run_script(["start.sh"], {"PREPARE": "0"})
+        self.assertEqual(code, 0, out)
+        self.assertIn("is now LIVE", out)
+        for h in ["head", "w1", "w2", "w3"]:
+            self.containers(h)
+        (self.sim / "smoke").write_text('{"choices": [{"message": {"role": "assistant", "content": "OK"}}], "usage": {"completion_tokens": 1}}')
+        (self.sim / "smoke_status").write_text("500")
+        code, out = self.run_script(["start.sh"], {"PREPARE": "0", "PYTHONOPTIMIZE": "1"})
+        self.assertNotEqual(code, 0, out)
+        self.assertNotIn("is now LIVE", out)
 
     def test_restart_stops_when_a_rank_cannot_be_stopped(self):
         for h in ["head", "w1", "w2", "w3"]:
@@ -361,6 +535,42 @@ node_order() { echo 0,1,2,3; }
         self.assertEqual(code, 0, out)
         self.assertTrue(self.prepared(), out)
         self.assertIn("Not ready yet", out)
+
+
+class MasterAddr(ScriptTest):
+    """The rendezvous address config.sh derives: a Tailscale address only when the node has no other (issue #21)."""
+
+    def derived(self, getent_addrs, hostname_i):
+        bin_ = self.tmp / "bin"
+        (bin_ / "getent").write_text("#!/bin/sh\n" + "".join(f"echo '{a} STREAM host'\n" for a in getent_addrs) + ("exit 0\n" if getent_addrs else "exit 2\n"))
+        (bin_ / "getent").chmod(0o755)
+        (bin_ / "hostname").write_text(f"#!/bin/sh\n[ \"$1\" = -I ] && echo '{hostname_i}' || echo spark1\n")
+        (bin_ / "hostname").chmod(0o755)
+        code, out = self.bash('echo "@$MASTER_ADDR"')
+        self.assertEqual(code, 0, out)
+        return out.split("@")[-1].strip()
+
+    def test_the_hostname_address_wins_as_before(self):
+        self.assertEqual(self.derived(["192.0.2.5"], "192.0.2.5 100.101.1.2"), "192.0.2.5")
+
+    def test_a_tailscale_hostname_address_gives_way_to_the_lan(self):
+        self.assertEqual(self.derived(["100.101.1.2"], "100.101.1.2 192.0.2.5"), "192.0.2.5")
+        self.assertEqual(self.derived(["100.64.0.1", "198.51.100.7"], "100.64.0.1 198.51.100.7"), "198.51.100.7")
+
+    def test_tailscale_first_in_hostname_i_without_getent(self):
+        self.assertEqual(self.derived([], "100.127.255.1 fd7a::1 192.0.2.5"), "192.0.2.5")
+
+    def test_an_address_just_outside_the_tailscale_block_is_kept(self):
+        self.assertEqual(self.derived(["100.63.0.1"], "100.63.0.1 192.0.2.5"), "100.63.0.1")
+        self.assertEqual(self.derived(["100.128.0.1"], "100.128.0.1 192.0.2.5"), "100.128.0.1")
+
+    def test_only_tailscale_is_still_used(self):
+        self.assertEqual(self.derived(["100.101.1.2"], "100.101.1.2"), "100.101.1.2")
+        self.assertEqual(self.derived([], "100.101.1.2"), "100.101.1.2")
+
+    def test_an_explicit_master_addr_wins(self):
+        self.env["MASTER_ADDR"] = "100.101.1.2"
+        self.assertEqual(self.derived(["192.0.2.5"], "192.0.2.5"), "100.101.1.2")
 
 
 class RingGraphs(ScriptTest):
@@ -426,6 +636,11 @@ class PreparedState(ScriptTest):
 
     def test_nfs_path_changes_marker(self):
         self.assertChanges({"NFS_PATH": "/other"})
+
+    def test_rank_local_changes_the_marker_only_when_on(self):
+        self.assertEqual(self.state(), self.state({"RANK_LOCAL": "0"}))
+        self.assertChanges({"RANK_LOCAL": "1"})
+        self.assertNotEqual(self.state({"RANK_LOCAL": "1"}), self.state({"RANK_LOCAL": "1", "WORKER_RANK_DIR": "/other"}))
 
     def test_nfs_volume_changes_marker(self):
         self.assertChanges({"NFS_VOLUME": "other-volume"})
@@ -506,6 +721,144 @@ class PreparedState(ScriptTest):
         for var, value in [("ORDER", "0,1,2,3"), ("ABLIT", "1"), ("WORKER2", "w9")]:
             with self.subTest(var=var):
                 self.assertChanges({var: value})
+
+
+# a stand-in for the image's tf-dsv41-rank-cache: --index-only prints "[rank G]" (or fails for a rank in $FAIL_INDEX,
+# with nothing on stdout, as the real one does on a tensor it cannot describe); otherwise it writes the weight file
+# under the name the engine looks for, and refuses an OUT_DIR that already holds one of that rank (as the real one)
+FAKE_RANK_CACHE = r"""#!BASH
+g=$3; out=${2/#\/hf/$HF_CACHE}
+if [[ " $* " == *" --index-only "* ]]; then
+  [[ ",$FAIL_INDEX," != *",$g,"* ]] || { echo "layers.0.attn.wq_a.weight: FileNotFound" >&2; exit 1; }
+  printf '[rank %s]' "$g"; exit 0
+fi
+echo "$g" >> "$SIM/built"
+compgen -G "$out/rank${g}of4-*.bin" >/dev/null && { echo "$out already holds a weight file of rank $g" >&2; exit 1; }
+printf 'weights %s' "$g" > "$out/rank${g}of4-$(printf '[rank %s]' "$g" | sha256sum | cut -c1-20).bin"
+"""
+
+
+class PrepareWorkerCopies(ScriptTest):
+    """Step 8 of prepare.sh with RANK_LOCAL=1: the worker's folder holds only the file it reads, up to date."""
+
+    def setUp(self):
+        super().setUp()
+        source = (self.repo / "scripts" / "prepare.sh").read_text()
+        self.step = source[source.index("# ---------------------------------------------------------------- 8."):source.index("write_prepared_marker || die")]
+        # docker run's copy, done by the shell: /hf is this Spark's HF_CACHE, /out the -v folder
+        (self.tmp / "bin" / "docker").write_text("#!" + BASH + r"""
+echo "$*" >> "$SIM/docker-args"
+out=""; for a in "$@"; do [[ "$a" == *:/out ]] && out=${a%:/out}; done
+script=${!#}; script=${script//\/hf/$HF_CACHE}; script=${script//\/out/$out}
+exec """ + BASH + r""" -c "$script"
+""")
+        self.env["HF_CACHE"] = str(self.tmp / "hf")
+        code, out = self.bash('echo "@$DATA_DIR|$WORKER_RANK_DIR"')
+        self.assertEqual(code, 0, out)
+        data_dir, rank_dir = out.split("@")[-1].strip().split("|")
+        self.cache = Path(data_dir) / "rank-cache"
+        self.cache.mkdir(parents=True)
+        for n in range(4):
+            (self.cache / f"rank{n}of4-new.bin").write_bytes(b"n" * (10 + n))
+        self.home_dir = {h: Path(rank_dir.replace("$HOME", str(self.sim / "home" / h))) for h in ("w1", "w2", "w3")}
+
+    def run_step(self):
+        return self.bash("die() { echo \"DIED: $*\" >&2; exit 1; }\nnode_order() { echo 0,1,2,3; }\n" + self.step,
+                         {"RANK_LOCAL": "1", "IMAGE": "runtime-only", "BASE_IMAGE": "base-missing"})
+
+    def test_copies_on_the_runtime_image_and_keeps_the_time(self):
+        code, out = self.run_step()
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("base-missing", (self.sim / "docker-args").read_text())
+        for i, h in enumerate(("w1", "w2", "w3"), 1):
+            copy = self.home_dir[h] / f"rank{i}of4-new.bin"
+            self.assertEqual(copy.read_bytes(), (self.cache / copy.name).read_bytes())
+            self.assertEqual(int(copy.stat().st_mtime), int((self.cache / copy.name).stat().st_mtime))
+        (self.sim / "docker-args").unlink()
+        code, out = self.run_step()
+        self.assertEqual(code, 0, out)
+        self.assertFalse((self.sim / "docker-args").exists(), "an up-to-date copy was copied again")
+
+    def test_an_old_weight_file_beside_the_new_one_is_removed(self):
+        # two files of one node stop the rank at start (rank_cache.find: SeveralRankCaches)
+        d = self.home_dir["w2"]
+        d.mkdir(parents=True)
+        (d / "rank2of4-old.bin").write_bytes(b"o" * 12)
+        (d / "rank3of4-old.bin").write_bytes(b"o" * 13)
+        (d / "rank2of4-old.bin.part").write_bytes(b"o")
+        (d / "keep.txt").write_text("not a weight file")
+        code, out = self.run_step()
+        self.assertEqual(code, 0, out)
+        self.assertEqual(sorted(f.name for f in d.iterdir()), ["keep.txt", "rank2of4-new.bin"])
+
+    def test_a_copy_of_the_same_name_and_size_but_older_is_copied_again(self):
+        d = self.home_dir["w1"]
+        d.mkdir(parents=True)
+        stale = d / "rank1of4-new.bin"
+        stale.write_bytes(b"s" * 11)
+        os.utime(stale, (1000, 1000))
+        code, out = self.run_step()
+        self.assertEqual(code, 0, out)
+        self.assertEqual(stale.read_bytes(), b"n" * 11)
+
+
+class PrepareWeightFiles(ScriptTest):
+    """Step 5 of prepare.sh, the loop that keeps or rebuilds each node's weight file, run with in_hf as a local stand-in."""
+
+    def setUp(self):
+        super().setUp()
+        tools = self.tmp / "tools"
+        tools.mkdir()
+        (tools / "tf-dsv41-rank-cache").write_text(FAKE_RANK_CACHE.replace("BASH", BASH))
+        (tools / "tf-dsv41-rank-cache").chmod(0o755)
+        if not shutil.which("sha256sum"):
+            (tools / "sha256sum").write_text("#!/bin/sh\nexec shasum -a 256 \"$@\"\n")
+            (tools / "sha256sum").chmod(0o755)
+        self.env["TOOLS"] = str(tools)
+        self.env["HF_CACHE"] = str(self.tmp / "hf")
+        lines = (self.repo / "scripts" / "prepare.sh").read_text().splitlines()
+        start = next(i for i, l in enumerate(lines) if l.startswith("for g in 0 1 2 3; do")
+                     and "--index-only" in "\n".join(lines[i:i + 4]))
+        end = next(i for i in range(start, len(lines)) if lines[i] == "done")
+        self.loop = "\n".join(lines[start:end + 1])
+
+    def run_loop(self, fail_index=""):
+        body = (
+            'in_hf() { local ep; while [[ "$1" == --* ]]; do [[ "$1" != --entrypoint ]] || ep=$2; shift 2; done; shift\n'
+            '  PATH="$TOOLS:$PATH" "$ep" "$@"; }\n'
+            'IMAGE=image SNAP=/snap SNAP_C=/hf/snap\n'
+            'mkdir -p "$DATA_DIR/rank-cache"\n' + self.loop)
+        return self.bash(body, {"FAIL_INDEX": fail_index})
+
+    def rank_files(self):
+        d = next((self.tmp / "hf").glob("tensorfold-dsv41/*/rank-cache"), None)
+        return sorted(f.name for f in d.glob("rank*of4-*.bin")) if d else []
+
+    def built(self):
+        f = self.sim / "built"
+        return f.read_text().split() if f.exists() else []
+
+    def test_builds_then_keeps_the_weight_files(self):
+        code, out = self.run_loop()
+        self.assertEqual(code, 0, out)
+        self.assertEqual(len(self.rank_files()), 4, out)
+        self.assertEqual(self.built(), ["0", "1", "2", "3"])
+        code, out = self.run_loop()
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.count("ready"), 4, out)
+        self.assertEqual(self.built(), ["0", "1", "2", "3"], "a ready weight file was rebuilt")
+
+    def test_failed_index_keeps_that_ranks_weight_file(self):
+        code, out = self.run_loop()
+        self.assertEqual(code, 0, out)
+        before = self.rank_files()
+        for rank in "0123":
+            with self.subTest(rank=rank):
+                code, out = self.run_loop(fail_index=rank)
+                self.assertNotEqual(code, 0, out)
+                self.assertIn(f"node {rank}'s weight-file index", out)
+                self.assertEqual(self.rank_files(), before, out)
+        self.assertEqual(self.built(), ["0", "1", "2", "3"], "a weight file was rebuilt after a failed index")
 
 
 if __name__ == "__main__":

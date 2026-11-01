@@ -34,7 +34,8 @@ declare -A WORKER_DOWN=()
 worker() {
   local i=$1; shift
   [[ -z "${WORKER_DOWN[$i]:-}" ]] || return 255
-  ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 "$(worker_host "$i")" "$@"
+  # Launcher locks belong to the parent, not persistent SSH children.
+  ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 "$(worker_host "$i")" "$@" 8>&- 9>&-
 }
 
 # save_log <dir> <rank> <container> <keep>: the container's log (stdout and stderr, with timestamps) gzipped into
@@ -88,7 +89,7 @@ ensure_nfs_volume() {
     die "$h's docker volume $NFS_VOLUME is ${have%% *} from ${have#* }, not :$NFS_PATH from $server: remove it there (docker volume rm $NFS_VOLUME) or set NFS_VOLUME / NFS_PATH / $(wvar NFS_SERVER "$i")"
   fi
 }
-worker_nfs() { local i=$1; shift; worker "$i" "docker run --rm --network none --entrypoint '$1' -v '$NFS_VOLUME:/hf:ro' '$BASE_IMAGE' $(printf '%q ' "${@:2}")"; }
+worker_nfs() { local i=$1; shift; worker "$i" "docker run --rm --network none --entrypoint '$1' -v '$NFS_VOLUME:/hf:ro' '$IMAGE' $(printf '%q ' "${@:2}")"; }
 
 # link_info <peer address>: this node's side of the link to <peer>: "<address> <netdev> <rdma device> <gid index>".
 # The netdev and source address come from the route to the peer; the RDMA device from sysfs; the GID index is the
@@ -296,7 +297,7 @@ node_inventory() {
 }
 
 # pair_links <ranks...> (stdin: node_inventory lines, each prefixed with its rank): two nodes are linked where they
-# have addresses in one subnet (a direct cable, or a switch). Prints "rank <r> <default netdev> <hcas> <gid or ->" (a
+# have addresses in one subnet (a direct cable, or a switch). Prints "rank <r> <bootstrap netdev> <hcas> <gid or ->" (a
 # node's RoCE devices toward all its peers, in its sysfs order; the GID index when it is one for all of them), "peer <i>
 # <worker i's lowest address on its link to the head>", "missing <a> <b>" for two ranks without a common subnet, and
 # "ring <ranks...>" when the links form one ring through four or more ranks and no others (every rank linked to two),
@@ -316,6 +317,9 @@ for line in sys.stdin:
     elif len(f) == 5:
         nodes.setdefault(int(f[0]), []).append((f[1], f[2], ipaddress.ip_interface(f[3]), f[4]))
 ranks = [int(x) for x in sys.argv[1:]]
+# Pick one common subnet globally so every rank uses the same bootstrap rail.
+common = set.intersection(*(set(e[2].network for e in nodes.get(r, [])) for r in ranks))
+bootstrap_net = min(common, key=lambda n: (n.version, int(n.network_address), n.prefixlen), default=None)
 linked = lambda e, others: any(e[2].network == o[2].network for o in others)
 links = {r: set() for r in ranks}
 for r in ranks:
@@ -337,7 +341,10 @@ for r in ranks:
     for e in nodes.get(r, []):              # in the node sysfs order
         if id(e) in used and e[1] not in hcas:
             hcas.append(e[1]); gids.add(e[3])
-    print("rank", r, default.get(r) or "-", ",".join(hcas) or "-", gids.pop() if len(gids) == 1 else "-")
+    bootstrap = default.get(r) or "-"
+    if bootstrap_net is not None:
+        bootstrap = min((e for e in nodes[r] if e[2].network == bootstrap_net), key=lambda e: e[2].ip)[0]
+    print("rank", r, bootstrap, ",".join(hcas) or "-", gids.pop() if len(gids) == 1 else "-")
 def splits(n):
     for r in ranks:
         for s in links[r]:
@@ -364,8 +371,9 @@ if len(ranks) > 3 and all(len(links[r]) == 2 for r in ranks):
 }
 
 # TP>2: every node's RoCE netdevs, paired by subnet (pair_links); a node's NCCL devices are the union of its devices
-# toward all its peers. NCCL's bootstrap socket goes over each node's default-route netdev (SOCKET_IFNAME overrides
-# it): on a triangle every pair has its own subnet, so no CX7 netdev reaches both peers, and the 10.0.0.x-style
+# toward all its peers. NCCL bootstrap uses a RoCE subnet shared by every rank when available, otherwise each node's
+# default-route netdev. SOCKET_IFNAME overrides either choice. On a triangle every pair has its own subnet, so no
+# CX7 netdev reaches both peers, and the 10.0.0.x-style
 # addresses some setups route over the cables sit on lo. The rendezvous is MASTER_ADDR (config.sh).
 # Four Sparks have two CX7 ports each, so no switch means a ring: each Spark cabled to two others, the two across from
 # it reached only through a neighbour. That is FABRIC=ring when the ring runs in rank order (0-1-2-3-0, WORKER ..

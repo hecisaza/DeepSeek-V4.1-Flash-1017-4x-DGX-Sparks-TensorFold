@@ -37,10 +37,15 @@ WORKER3="${WORKER3:-}"; FABRIC_PEER3="${FABRIC_PEER3:-}"; WORKER_HF_CACHE3="${WO
 MASTER_PORT="${MASTER_PORT:-29760}"  # the ranks' rendezvous port (keep it on the private links)
 # The rendezvous address: this node's address every worker reaches (what its hostname resolves to, else its first one).
 # On a ring the workers across it reach it through a neighbour (scripts/nodes.sh says which address each gets).
-_ma=$(getent ahostsv4 "$(hostname)" 2>/dev/null | awk '$1 !~ /^127\./ {print $1; exit}' || true)
+# A Tailscale address (100.64.0.0/10, which hostname and `hostname -I` can name first) only when the node has no other:
+# the ranks rendezvous on the private links (issue #21). MASTER_ADDR overrides all of this.
+_ts='^100[.](6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])[.]'
+_ma=$(getent ahostsv4 "$(hostname)" 2>/dev/null | awk -v t="$_ts" '$1 !~ /^127\./ && $1 !~ t {print $1; exit}' || true)
+[[ -n "$_ma" ]] || _ma=$(hostname -I 2>/dev/null | tr ' ' '\n' | awk -v t="$_ts" 'NF && $1 !~ /:/ && $1 !~ t {print $1; exit}' || true)
 [[ -n "$_ma" ]] || _ma=$(hostname -I 2>/dev/null | awk '{print $1}' || true)
 MASTER_ADDR="${MASTER_ADDR:-$_ma}"
-SOCKET_IFNAME="${SOCKET_IFNAME:-}"     # NCCL's bootstrap socket's netdev on every node (default: the default route's)
+unset _ts
+SOCKET_IFNAME="${SOCKET_IFNAME:-}"     # NCCL bootstrap override; auto: TP2 link, TP>2 common fabric or default route
 # The 2D split's node (role) each NCCL rank serves (the engine's TF_DS_2D_ORDER). auto: 0,1,3,2 on a ring (every row
 # and column partner then on a cable of its own; NCCL's all-gathers go round the ring in rank order), 0,1,2,3 on a switch.
 ORDER="${ORDER:-auto}"
@@ -49,19 +54,29 @@ ORDER="${ORDER:-auto}"
 # DeepSeek's own release, served as published: FP8 E4M3 linears (UE8M0 scales on 32 x 32 blocks), MXFP4 routed
 # experts, bf16 elsewhere, the Engram tables in FP8 read from disk. ~510 GB, downloaded once on this Spark; the workers
 # read it (and their weight files) from here over NFS.
-# DERISKED=1 selects Blackfrost-AI's checkpoint; explicit MODEL_ID / MODEL_REVISION still win.
+# DERISKED=1 selects Blackfrost-AI's checkpoint. NVFP4=1 selects NVIDIA's NVFP4 release of the same model (routed experts
+# NVFP4 with 4-bit activations on GB10's block-scaled MMA, Engram tables MXFP4, everything else DeepSeek's bytes; ~430 GB;
+# zig/patches/0037). Explicit MODEL_ID / MODEL_REVISION still win.
 DERISKED="${DERISKED:-0}"
 [[ "$DERISKED" =~ ^[01]$ ]] || { echo "DERISKED must be 0 or 1" >&2; exit 1; }
+NVFP4="${NVFP4:-0}"
+[[ "$NVFP4" =~ ^[01]$ ]] || { echo "NVFP4 must be 0 or 1" >&2; exit 1; }
+[[ "$NVFP4" != 1 || "$DERISKED" != 1 ]] || { echo "NVFP4=1 and DERISKED=1 name two checkpoints: set one" >&2; exit 1; }
 _default_model=deepseek-ai/DeepSeek-V4.1-Flash-1017
 [[ "$DERISKED" != 1 ]] || _default_model=Blackfrost-AI/DeepSeek-V4.1-Flash-1017-DERISKED-FP8
+[[ "$NVFP4" != 1 ]] || _default_model=nvidia/DeepSeek-V4.1-Flash-1017-NVFP4
 MODEL_ID="${MODEL_ID:-$_default_model}"
 _rev=""
 case "$MODEL_ID" in
   deepseek-ai/DeepSeek-V4.1-Flash-1017) _rev=1bae0e1088993b9b82de08f59de5be5a34e42170 ;;
   Blackfrost-AI/DeepSeek-V4.1-Flash-1017-DERISKED-FP8) _rev=4bb7df57c6bf26caf40e8da905e4062aed088ea6 ;;
+  nvidia/DeepSeek-V4.1-Flash-1017-NVFP4) _rev=480550d349ede47a048eb65a276c5c01a06256e2 ;;
 esac
 unset _default_model
 MODEL_REVISION="${MODEL_REVISION-$_rev}"
+# What the banners and first-run messages say of the checkpoint.
+if [[ "$MODEL_ID" == nvidia/DeepSeek-V4.1-Flash-1017-NVFP4 ]]; then MODEL_FORMAT="NVFP4 experts / MXFP4 Engram"; MODEL_SIZE="~430 GB"
+else MODEL_FORMAT="native FP8 / MXFP4"; MODEL_SIZE="~510 GB"; fi
 # ABLIT=1 grafts drowzeys/keys-DeepSeek-V4.1-Flash-1017-Abliterated's native-FP8 sidecar (attn.wo_b, layers 10-35,
 # the overlay's "recipe A") onto the checkpoint before the rank caches are baked. Gated, free, automatic approval
 # after accepting its terms at https://huggingface.co/drowzeys/keys-DeepSeek-V4.1-Flash-1017-Abliterated while
@@ -136,6 +151,9 @@ ENGRAM_AIO="${ENGRAM_AIO:-1}"
 # none). ENGRAM_INSTREAM=1: a round's wait for its rows runs as a host step on the GPU stream instead of holding the host
 # (needs ENGRAM_AIO=1).
 ENGRAM_PACKED="${ENGRAM_PACKED:-0}"
+# The packed shards hold FP8 rows and decode them on the GPU; NVIDIA's MXFP4 tables are read as stored.
+[[ "$MODEL_ID" != nvidia/DeepSeek-V4.1-Flash-1017-NVFP4 || "$ENGRAM_PACKED" != 1 ]] ||
+  { echo "ENGRAM_PACKED=1 reads FP8 Engram tables: NVFP4=1's are MXFP4; leave it 0" >&2; exit 1; }
 ENGRAM_OWNED="${ENGRAM_OWNED:-1}"
 ENGRAM_CACHE_MIB="${ENGRAM_CACHE_MIB:-2048}"
 ENGRAM_INSTREAM="${ENGRAM_INSTREAM:-0}"
@@ -172,6 +190,18 @@ NFS_VOLUME="${NFS_VOLUME:-dsv41-hf}"
 # random 4 KiB rows from them, which over NFS took ~10 ms each and most of the round. prepare.sh copies them there once
 # (from the NFS volume); the main weights and the weight files still load over NFS. A path on the worker.
 WORKER_ENGRAM_DIR="${WORKER_ENGRAM_DIR:-\$HOME/.cache/dsv41-tensorfold/engram-${MODEL_REVISION:0:8}}"
+# RANK_LOCAL=1 (opt-in): each worker's own weight file on its own disk too. Read over NFS, a worker's ~77-81 GB file was
+# most of a start (~0.7 GB/s over a CX7 cable, ~0.27 GB/s over a 2.5 GbE LAN). prepare.sh copies the file each worker
+# reads there and removes that folder's other weight files (a worker short of disk keeps NFS, with a warning); start.sh
+# mounts the copy when its name, size and modification time match this Spark's, else that worker reads over NFS as
+# before. RANK_LOCAL=0 leaves every worker on NFS and leaves any copies on disk. A path on the worker.
+RANK_LOCAL="${RANK_LOCAL:-0}"
+WORKER_RANK_DIR="${WORKER_RANK_DIR:-\$HOME/.cache/dsv41-tensorfold/rank-cache-${DATA_SUB//\//-}}"
+# rank_file <node>: this Spark's weight file of 2D node <node> (its name carries the index's hash), empty if none
+rank_file() { local f; for f in "$DATA_DIR"/rank-cache/rank"$1"of4-*.bin; do [[ -f "$f" ]] && { echo "$f"; return 0; }; done; return 0; }
+# what identifies a weight file's bytes between two Sparks: its name holds only the index's hash, so a file baked again
+# with the same layout has the same name and size (the copy keeps the original's modification time)
+rank_stamp() { stat -c '%s %Y' "$1"; }
 # With ENGRAM_PACKED=1 the packed shards replace that copy, on every Spark's own disk (this one's too): a path on each.
 ENGRAM_PACKED_DIR="${ENGRAM_PACKED_DIR:-\$HOME/.cache/dsv41-tensorfold/engram-packed-${MODEL_REVISION:0:8}}"
 packed_dir_here() { echo "${ENGRAM_PACKED_DIR//\$HOME/$HOME}"; }
@@ -215,6 +245,7 @@ prepared_state() {
     die "cannot hash model/chat_template.jinja (sha256sum)"
   f=("model=$MODEL_ID@$(snapshot_rev)" "image=$(image_ident "$IMAGE")" "kit=$KIT_REF" "order=$ORDER" "engram=$WORKER_ENGRAM_DIR" "ablit=$ABLIT")
   [[ "$ENGRAM_PACKED" != 1 ]] || f+=("packed=$ENGRAM_PACKED_DIR/$(packed_nodes)")
+  [[ "$RANK_LOCAL" != 1 ]] || f+=("rank_local=$WORKER_RANK_DIR")
   f+=("hf=$HF_CACHE" "nfs_path=$NFS_PATH" "nfs_volume=$NFS_VOLUME" "template=$tpl")
   for i in 1 2 3; do f+=("w$i=$(worker_host "$i")" "nfs$i=$(wval NFS_SERVER "$i")"); done
   (export LC_ALL=C; printf '%q ' "${f[@]}"; echo)   # (a subshell: the caller's locale is left as it was)

@@ -19,7 +19,7 @@
 #            ENGRAM_INSTREAM, ROUND_MS, DRAFT_MS, SERVED_K
 #   nodes    WORKER, WORKER2, WORKER3, FABRIC_PEER*, MASTER_ADDR, MASTER_PORT, SOCKET_IFNAME, ORDER, NCCL_CHANNELS,
 #            NCCL_DEBUG
-#   files    DERISKED, MODEL_ID, MODEL_REVISION, HF_CACHE, NFS_PATH, NFS_SERVER*, NFS_VOLUME, STATE_DIR, LOG_DIR, LOG_KEEP
+#   files    DERISKED, NVFP4, MODEL_ID, MODEL_REVISION, HF_CACHE, NFS_PATH, NFS_SERVER*, NFS_VOLUME, STATE_DIR, LOG_DIR, LOG_KEEP
 #   engine   TF_REPO, TF_REF, KIT_REPO, KIT_REF, ZIG_VERSION, BASE_IMAGE, IMAGE, CONTAINER_NAME
 #   setup    PREPARE (auto | 1 | 0), WAIT_TIMEOUT (seconds, default 2400), DRY_RUN=1
 #   ranks    every TENSORFOLD_* and TF_DS_* variable you set goes to every rank
@@ -44,7 +44,7 @@ for v in CONTEXT POOL PARALLEL ROUND_ROWS MAX_TOKENS; do [[ "${!v}" =~ ^[1-9][0-
 (( POOL >= CONTEXT )) || die "POOL ($POOL) holds every stream's positions together: at least CONTEXT ($CONTEXT)"
 (( PARALLEL <= 16 )) || die "PARALLEL is 1 to 16, not $PARALLEL"
 [[ "$SERVED_K" =~ ^(solo|all|off)$ ]] || die "SERVED_K is solo, all or off, not $SERVED_K"
-for v in THINKING DRAFTS VISION RDMA GRAPHS SIDE PREFETCH ENGRAM_AIO ENGRAM_PACKED ENGRAM_OWNED ENGRAM_INSTREAM; do [[ "${!v}" =~ ^[01]$ ]] || die "$v is 0 or 1, not ${!v}"; done
+for v in THINKING DRAFTS VISION RDMA GRAPHS SIDE PREFETCH ENGRAM_AIO ENGRAM_PACKED ENGRAM_OWNED ENGRAM_INSTREAM RANK_LOCAL; do [[ "${!v}" =~ ^[01]$ ]] || die "$v is 0 or 1, not ${!v}"; done
 [[ "$ENGRAM_CACHE_MIB" =~ ^[0-9]+$ ]] || die "ENGRAM_CACHE_MIB is a count of MiB, not $ENGRAM_CACHE_MIB"
 [[ "$ENGRAM_INSTREAM" == 0 || ( "$ENGRAM_PACKED" == 1 && "$ENGRAM_AIO" == 1 ) ]] || die "ENGRAM_INSTREAM=1 needs ENGRAM_PACKED=1 and ENGRAM_AIO=1"
 check_workers
@@ -55,7 +55,7 @@ source ./scripts/banner.sh
 echo
 banner
 printf '\n%s  Mia'"'"'s TensorFold Start Script%s\n' "$M" "$R"
-printf '%s  %s · 4 x DGX Spark · %s at once · %s-token window · native FP8 / MXFP4 · port %s%s\n\n' "$D" "$MODEL_ID" "$PARALLEL" "$CONTEXT" "$PORT" "$R"
+printf '%s  %s · 4 x DGX Spark · %s at once · %s-token window · %s · port %s%s\n\n' "$D" "$MODEL_ID" "$PARALLEL" "$CONTEXT" "$MODEL_FORMAT" "$PORT" "$R"
 STEPS=5
 step() { printf '%s[%s/%s]%s %s%s%s\n' "$M" "$1" "$STEPS" "$R" "$B" "$2" "$R"; }
 
@@ -67,6 +67,7 @@ need_workers
 (( DRY )) && log "DRY_RUN=1: printing the docker commands; nothing is stopped, started or prepared"
 
 API_HOST="$HOST"; [[ "$HOST" == 0.0.0.0 || "$HOST" == "::" ]] && API_HOST=127.0.0.1
+[[ "$API_HOST" != *:* ]] || API_HOST="[$API_HOST]"   # an IPv6 address in a URL needs brackets
 URL="http://$API_HOST:$PORT"
 running_here()   { [[ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null)" == true ]]; }
 running_worker() { [[ "$(worker "$1" docker inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null)" == true ]]; }
@@ -89,7 +90,7 @@ esac
 if (( need_prepare )); then
   if (( DRY )); then log "DRY_RUN: scripts/prepare.sh would run now (not ready yet)"
   else
-    log "Not ready yet: running scripts/prepare.sh (the first time this builds the image, downloads ~510 GB and writes four ~80 GB weight files)"
+    log "Not ready yet: running scripts/prepare.sh (the first time this builds the image, downloads $MODEL_SIZE and writes four ~80 GB weight files)"
     ./scripts/prepare.sh
   fi
 else
@@ -137,18 +138,27 @@ KIT=/hf/$KIT_SUB/kit
 FOLLOW="--pool $POOL --context $CONTEXT --engram $MODEL_ARG --token-map $DATA/dsv41_token_map.json --drafts $DRAFTS --round-rows $ROUND_ROWS --streams $PARALLEL"
 FOLLOW+=" --graphs $GRAPHS --side $SIDE --prefetch $PREFETCH --aio $ENGRAM_AIO"
 step 3 "Launch: container $CONTAINER_NAME, ranks 3 to 1 on the workers, then rank 0 here"
+IFS=, read -r -a ORD <<<"$NODE_ORDER"
 for i in 3 2 1; do
+  # its weight file from its own disk when the copy there (prepare.sh) matches this Spark's, else over NFS
+  rank_dir="$DATA/rank-cache"; rank_mount=""
+  rf=""; [[ "$RANK_LOCAL" != 1 ]] || rf=$(rank_file "${ORD[i]}")
+  if [[ -n "$rf" ]] && worker "$i" "[[ \"\$(stat -c '%s %Y' $WORKER_RANK_DIR/${rf##*/} 2>/dev/null)\" == '$(rank_stamp "$rf")' ]]" 2>/dev/null; then
+    rank_dir=/rank-local; rank_mount="-v $WORKER_RANK_DIR:/rank-local:ro"
+  elif [[ "$RANK_LOCAL" == 1 ]]; then
+    warn "rank $i reads its weight file over NFS: no matching copy in $WORKER_RANK_DIR on $(worker_host "$i") (PREPARE=1 ./start.sh restart makes one)"
+  fi
   # Engram's tables from the worker's own disk (prepare.sh), the rest over NFS; with packed shards the tables' headers
   # come over NFS and the rows from the shards on the worker's disk
   if [[ "$ENGRAM_PACKED" == 1 ]]; then
-    cmd="tf-dsv41-lanes $MODEL_ARG $DATA/rank-cache $i 4 ${LINK_HEAD_ADDR[i]:-$MASTER_ADDR} $MASTER_PORT $KIT $FOLLOW"
+    cmd="tf-dsv41-lanes $MODEL_ARG $rank_dir $i 4 ${LINK_HEAD_ADDR[i]:-$MASTER_ADDR} $MASTER_PORT $KIT $FOLLOW"
     engram_mount="-v $ENGRAM_PACKED_DIR:/engram-packed:ro"
   else
-    cmd="tf-dsv41-lanes $MODEL_ARG $DATA/rank-cache $i 4 ${LINK_HEAD_ADDR[i]:-$MASTER_ADDR} $MASTER_PORT $KIT ${FOLLOW/--engram $MODEL_ARG/--engram /engram}"
+    cmd="tf-dsv41-lanes $MODEL_ARG $rank_dir $i 4 ${LINK_HEAD_ADDR[i]:-$MASTER_ADDR} $MASTER_PORT $KIT ${FOLLOW/--engram $MODEL_ARG/--engram /engram}"
     engram_mount="-v $WORKER_ENGRAM_DIR:/engram:ro"
   fi
   [[ "$RDMA" == 0 ]] || cmd+=" --rdma ${NODE_HCAS[i]}"   # this node's RoCE devices
-  remote="mkdir -p \$HOME/.cache/dsv41-tensorfold && docker run -d --name $CONTAINER_NAME $RUN_ARGS -v $NFS_VOLUME:/hf:ro $engram_mount $(envs "${ENGINE_ENV[@]}") $(rank_nccl_env "$i") $IMAGE $cmd"
+  remote="mkdir -p \$HOME/.cache/dsv41-tensorfold && docker run -d --name $CONTAINER_NAME $RUN_ARGS -v $NFS_VOLUME:/hf:ro $engram_mount $rank_mount $(envs "${ENGINE_ENV[@]}") $(rank_nccl_env "$i") $IMAGE $cmd"
   if (( DRY )); then printf '[dry-run] rank %s on %s:\n  %s\n' "$i" "$(worker_host "$i")" "$remote"; continue; fi
   log "Rank $i on $(worker_host "$i"): $cmd"
   worker "$i" "$remote" >/dev/null || die "could not start rank $i on $(worker_host "$i")"
@@ -177,7 +187,8 @@ log "Rank 0 here: ${SERVE[*]}"
 
 # ---------------------------------------------------------------- 4. load
 step 4 "Loading: ~75 GiB of weights on each Spark over NFS, then the caches (a few minutes)"
-docker logs -f "$CONTAINER_NAME" 2>&1 | sed -u "s/^/  ${D}│${R} /" &
+# Neither log follower may retain the parent launcher lock after it exits.
+docker logs -f "$CONTAINER_NAME" 8>&- 2>&1 | sed -u "s/^/  ${D}│${R} /" 8>&- &
 LOGS_PID=$!
 trap 'kill $LOGS_PID 2>/dev/null || true' EXIT
 fail() {
@@ -197,19 +208,34 @@ log "Server answered after $((SECONDS - start))s"
 
 # ---------------------------------------------------------------- 5. smoke test
 step 5 "Smoke test: one chat completion through all 4 ranks"
-if smoke=$(curl -s --max-time 300 "$URL/v1/chat/completions" -H 'Content-Type: application/json' \
+# a pass needs HTTP 200, no error object and the assistant's reply text (curl -w adds the status as the last line)
+if smoke=$(curl -s --max-time 300 -w '\n%{http_code}' "$URL/v1/chat/completions" -H 'Content-Type: application/json' \
              -d "{\"model\": \"$SERVED_NAME\", \"max_tokens\": 16, \"temperature\": 0, \"chat_template_kwargs\": {\"enable_thinking\": false}, \"messages\": [{\"role\": \"user\", \"content\": \"Reply with OK.\"}]}" |
-           python3 -c 'import json,sys; r = json.load(sys.stdin); c = r["choices"][0]["message"].get("content") or ""; assert c.strip(); assert len(c.strip()) < 8 or len(set(c.strip())) > 2, "one repeated character"; print(repr(c.strip()[:40]) + ",", r["usage"]["completion_tokens"], "tokens")' 2>/dev/null); then
+           python3 -c 'import json,sys
+def no(why): sys.exit(why)
+body, _, code = sys.stdin.read().rpartition("\n")
+code == "200" or no("HTTP " + code)
+r = json.loads(body)
+r.get("error") is None or no("an error reply")
+m = r["choices"][0]["message"]
+m.get("role", "assistant") == "assistant" or no("not the assistant")
+c = (m.get("content") or "").strip()
+c or no("no reply text")
+len(c) < 8 or len(set(c)) > 2 or no("one repeated character")
+print(repr(c[:40]) + ",", r["usage"]["completion_tokens"], "tokens")' 2>/dev/null); then
   log "OK: $smoke"
 else
-  fail "the smoke test request failed (no reply text, or one character repeated); the ranks are still running"
+  fail "the smoke test request failed (an HTTP error, an error reply, no reply text, or one character repeated); the ranks are still running"
 fi
-IP=$(hostname -I 2>/dev/null | awk '{print $1}')
-[[ "$HOST" == 0.0.0.0 || "$HOST" == "::" ]] || IP="$HOST"
+# the address to print: HOST itself, or for a wildcard one of this Spark's own (0.0.0.0 binds IPv4 only: an IPv4 one)
+if [[ "$HOST" == 0.0.0.0 ]]; then IP=$(hostname -I 2>/dev/null | tr ' ' '\n' | awk 'NF && !/:/ {print; exit}')
+elif [[ "$HOST" == "::" ]]; then IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+else IP="$HOST"; fi
+[[ "$IP" != *:* ]] || IP="[$IP]"
 printf '\n%s  ✔ %s is now LIVE! on port %s%s\n\n' "$G" "$SERVED_NAME" "$PORT" "$R"
 cat <<EOF
     API      http://${IP:-<spark-address>}:$PORT/v1   (model: $SERVED_NAME)
-    Window   $CONTEXT tokens · $PARALLEL at once · native FP8 / MXFP4 · drafts $( [[ "$DRAFTS" == 1 ]] && echo on || echo off) · images $( [[ "$VISION" == 1 ]] && echo on || echo off)
+    Window   $CONTEXT tokens · $PARALLEL at once · $MODEL_FORMAT · drafts $( [[ "$DRAFTS" == 1 ]] && echo on || echo off) · images $( [[ "$VISION" == 1 ]] && echo on || echo off)
     Logs     docker logs -f $CONTAINER_NAME$(for i in 1 2 3; do printf '   (rank %s: ssh %s docker logs -f %s)' "$i" "$(worker_host "$i")" "$CONTAINER_NAME"; done)
     Restart  ./start.sh restart
     Stop     ./stop.sh

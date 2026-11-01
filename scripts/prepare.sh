@@ -12,6 +12,7 @@
 #      chat format as encoding/encoding.py, which the server cannot run)
 #   6. a read-only NFS volume of this Spark's HF_CACHE on each worker, checked: every file a rank reads, by size
 #   7. Engram's tables on each worker's disk, or with ENGRAM_PACKED=1 each Spark's packed shards (tf-dsv41-engram-pack)
+#   8. with RANK_LOCAL=1, each worker's weight file on its own disk
 # ./start.sh runs this by itself when needed. Safe to re-run: every step skips work that is already done.
 # Pass --rebuild to rebuild the image from scratch.
 set -euo pipefail
@@ -74,7 +75,7 @@ log "Image $IMAGE identical on all 4 Sparks"
 
 # ---------------------------------------------------------------- 3. the checkpoint
 command -v hf >/dev/null || die "the Hugging Face CLI ('hf') is not installed on this Spark: pip install -U huggingface_hub"
-log "Downloading $MODEL_ID${MODEL_REVISION:+ @ ${MODEL_REVISION:0:8}} into $HF_CACHE/hub (~510 GB the first time; resumes)"
+log "Downloading $MODEL_ID${MODEL_REVISION:+ @ ${MODEL_REVISION:0:8}} into $HF_CACHE/hub ($MODEL_SIZE the first time; resumes)"
 if ! hf download "$MODEL_ID" ${MODEL_REVISION:+--revision "$MODEL_REVISION"} --cache-dir "$HF_CACHE/hub" >/dev/null; then
   [[ -n "$MODEL_REVISION" && -f "$(model_cache_dir)/snapshots/$MODEL_REVISION/model.safetensors.index.json" ]] ||
     die "$MODEL_ID: the download failed"
@@ -97,11 +98,11 @@ if [[ ! -d "$KIT_DIR/.git" ]]; then
 fi
 [[ "$(git -C "$KIT_DIR" rev-parse HEAD)" == "$KIT_REF" ]] || die "$KIT_DIR is not at KIT_REF ${KIT_REF:0:8}: remove it and run this again"
 log "Checking the kit (its RoPE tables and image bias made from the checkpoint; CPU only)"
-kit_out=$(IMAGE="$BASE_IMAGE" "$KIT_DIR/kit/verify_kit.sh" "$SNAP" "$SNAP" 2>&1 | tail -1) || true
+kit_out=$(IMAGE="$IMAGE" "$KIT_DIR/kit/verify_kit.sh" "$SNAP" "$SNAP" 2>&1 | tail -1) || true
 # 1017's image routing bias is its own, not the original release's: the one file allowed to differ from MANIFEST
 [[ "$kit_out" == *"356 of 356 files match"* || "$kit_out" == *"355 of 356 files match"*"1 differ, 0 missing"* ]] ||
   die "the kit does not check out: $kit_out"
-grep -q "DIFFERS (bias): vision/gate_bias_vl.safetensors" <(IMAGE="$BASE_IMAGE" "$KIT_DIR/kit/verify_kit.sh" "$SNAP" 2>&1) ||
+grep -q "DIFFERS (bias): vision/gate_bias_vl.safetensors" <(IMAGE="$IMAGE" "$KIT_DIR/kit/verify_kit.sh" "$SNAP" 2>&1) ||
   [[ "$kit_out" == *"356 of 356"* ]] || die "a kit file other than the image bias differs from MANIFEST"
 log "Kit: $kit_out (the image bias is 1017's own)"
 
@@ -136,7 +137,10 @@ if [[ ! -s "$DATA_DIR/dsv41_token_map.json" ]]; then
 fi
 for g in 0 1 2 3; do
   # the file the engine looks for: its name carries the index's hash (tf-dsv41-rank-cache --index-only)
-  want=$(in_hf --entrypoint bash "$IMAGE" -c "tf-dsv41-rank-cache $SNAP_C /tmp/x $g 4 --parity --index-only | sha256sum | cut -c1-20")
+  # pipefail inside the container too: without it a failed --index-only hashes empty output, matches no weight file,
+  # and the loop below deletes the good one before a rebuild that fails the same way
+  want=$(in_hf --entrypoint bash "$IMAGE" -c "set -o pipefail; tf-dsv41-rank-cache $SNAP_C /tmp/x $g 4 --parity --index-only | sha256sum | cut -c1-20") ||
+    die "cannot compute node $g's weight-file index from $SNAP (tf-dsv41-rank-cache --index-only): is the checkpoint complete?"
   if [[ -f "$DATA_DIR/rank-cache/rank${g}of4-$want.bin" ]]; then log "Weight file of node $g: ready"; continue; fi
   rm -f "$DATA_DIR/rank-cache/rank${g}of4-"*.bin "$DATA_DIR/rank-cache/.rank${g}of4.partial"
   log "Weight file of node $g from the checkpoint (~80 GB, a few minutes)"
@@ -169,7 +173,7 @@ for i in 1 2 3; do
     die "$(worker_host "$i") cannot mount this Spark's :$NFS_PATH from $(nfs_server "$i") over NFS ($NFS_VOLUME): $(tail -1 <<<"$out")
     This Spark must export HF_CACHE (as $NFS_PATH) read-only to that worker's address on its link (README: NFS)"
   fi
-  have=$(worker "$i" "docker run --rm --network none -v '$NFS_VOLUME:/hf:ro' -w /hf --entrypoint find '$BASE_IMAGE' -L 'hub/models--${MODEL_ID//\//--}/snapshots/$(snapshot_rev)' '$DATA_SUB' '$KIT_SUB/kit' -path '*/.git' -prune -o -type f -printf '%p %s\n'" 2>/dev/null | LC_ALL=C sort || true)
+  have=$(worker "$i" "docker run --rm --network none -v '$NFS_VOLUME:/hf:ro' -w /hf --entrypoint find '$IMAGE' -L 'hub/models--${MODEL_ID//\//--}/snapshots/$(snapshot_rev)' '$DATA_SUB' '$KIT_SUB/kit' -path '*/.git' -prune -o -type f -printf '%p %s\n'" 2>/dev/null | LC_ALL=C sort || true)
   [[ "$have" == "$want" ]] || { diff <(printf '%s\n' "$want") <(printf '%s\n' "$have") | head -10 >&2
     die "$(worker_host "$i") does not see every file over NFS ($NFS_VOLUME)"; }
   log "Worker $i ($(worker_host "$i")) reads the checkpoint, its weight file and the kit over NFS"
@@ -215,8 +219,32 @@ for i in 1 2 3; do
   free=$(worker "$i" "mkdir -p $WORKER_ENGRAM_DIR && df -B1 --output=avail $WORKER_ENGRAM_DIR | tail -1")
   (( free + have > need + 10 * 1024 ** 3 )) || die "$(worker_host "$i") has $(( free / 1024 ** 3 )) GiB free: Engram's tables need $(( need / 1024 ** 3 )) GiB on its disk (WORKER_ENGRAM_DIR) and 10 GiB to spare"
   log "Worker $i ($(worker_host "$i")): copying Engram's tables to its disk ($(( need / 1024 ** 3 )) GiB over NFS, once)"
-  worker "$i" "docker run --rm --network none --user \$(id -u):\$(id -g) -v '$NFS_VOLUME:/hf:ro' -v $WORKER_ENGRAM_DIR:/out --entrypoint bash '$BASE_IMAGE' -c 'for f in ${shards[*]}; do cp /hf/$SNAP_REL/\$f /out/\$f.part && mv /out/\$f.part /out/\$f || exit 1; done'" ||
+  worker "$i" "docker run --rm --network none --user \$(id -u):\$(id -g) -v '$NFS_VOLUME:/hf:ro' -v $WORKER_ENGRAM_DIR:/out --entrypoint bash '$IMAGE' -c 'for f in ${shards[*]}; do cp /hf/$SNAP_REL/\$f /out/\$f.part && mv /out/\$f.part /out/\$f || exit 1; done'" ||
     die "copying Engram's tables to $(worker_host "$i") failed"
+done
+
+# ---------------------------------------------------------------- 8. each worker's weight file on its disk
+# RANK_LOCAL=1: start.sh mounts the copy when it matches this Spark's file. A second weight file of a node in the folder
+# stops that rank (rank_cache.find: SeveralRankCaches), so the folder holds only the file the worker reads.
+IFS=, read -r -a ord <<<"$(node_order)"
+for i in 1 2 3; do
+  [[ "$RANK_LOCAL" == 1 ]] || break
+  rf=$(rank_file "${ord[i]}"); [[ -n "$rf" ]] || die "no weight file of node ${ord[i]} in $DATA_DIR/rank-cache"
+  name=${rf##*/}; size=$(stat -c %s "$rf"); stamp=$(rank_stamp "$rf")
+  worker "$i" "mkdir -p $WORKER_RANK_DIR && find $WORKER_RANK_DIR -maxdepth 1 -type f -name 'rank?of4-*' ! -name '$name' -delete" ||
+    die "could not clear the old weight files in $WORKER_RANK_DIR on $(worker_host "$i")"
+  have=$(worker "$i" "stat -c '%s %Y' $WORKER_RANK_DIR/$name 2>/dev/null || echo none")
+  if [[ "$have" == "$stamp" ]]; then log "Worker $i ($(worker_host "$i")): its weight file on its disk"; continue; fi
+  # (an older copy of the same name is out of date: it no longer holds the space)
+  worker "$i" "rm -f $WORKER_RANK_DIR/$name" || die "could not remove the old weight file on $(worker_host "$i")"
+  free=$(worker "$i" "df -B1 --output=avail $WORKER_RANK_DIR | tail -1")
+  if ! (( ${free:-0} > size + 10 * 1024 ** 3 )); then
+    warn "$(worker_host "$i") has $(( ${free:-0} / 1024 ** 3 )) GiB free in WORKER_RANK_DIR, its weight file $(( size / 1024 ** 3 )) GiB and 10 to spare: rank $i keeps reading it over NFS"
+    continue
+  fi
+  log "Worker $i ($(worker_host "$i")): copying its weight file to its disk ($(( size / 1024 ** 3 )) GiB over NFS, once)"
+  worker "$i" "docker run --rm --network none --user \$(id -u):\$(id -g) -v '$NFS_VOLUME:/hf:ro' -v $WORKER_RANK_DIR:/out --entrypoint bash '$IMAGE' -c 'cp --preserve=timestamps /hf/$DATA_SUB/rank-cache/$name /out/$name.part && mv /out/$name.part /out/$name'" ||
+    die "copying the weight file to $(worker_host "$i") failed"
 done
 
 write_prepared_marker || die "cannot record the prepared state (the previous marker is left as it was): see the error above"

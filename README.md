@@ -55,9 +55,9 @@ rank's rendezvous address). Full list: [Credits](#credits) and [`CREDITS.md`](CR
 
 **This recipe's own patches** ([`zig/patches`](zig/patches)) **are Mia's AI Lab's work, except `0008` (Hector), `0026`
 (knapcio), `0027` (Thomas Kempka), `0028` and `0029` (upstream TensorFold fixes backported by Mauvis Ledford), `0030`
-and `0031` (Mauvis Ledford), `0033` (a backport by Manuel, manuel1618), `0034` (Hironori Uchikawa, uchkw) and `0036`
+and `0031` (Mauvis Ledford), `0033` (a backport by Manuel, manuel1618), `0034` (Hironori Uchikawa, uchkw), `0036`
 (upstream TensorFold's structured output by BobClawblaw and Ash Hart, and BertholomusAI's DeepSeek-V4.1 part of it,
-ported here)** -- see
+ported here), `0037`'s `mma_fp4` and activation format (Ash Hart's, from TensorFold), `0039`-`0043` (SvangenStudios) and `0046` (shalk3)** -- see
 [What the patches change](#what-the-patches-change) and [Credits](#credits) for who found or shaped each specific fix
 along the way.
 
@@ -66,6 +66,7 @@ along the way.
 - [Performance](#performance)
 - [Requirements](#requirements)
 - [Quick start](#quick-start)
+- [NVFP4 (opt-in)](#nvfp4-opt-in)
 - [ABLIT (opt-in)](#ablit-opt-in)
 - [Images and video](#images-and-video)
 - [Structured output and required tool calls](#structured-output-and-required-tool-calls)
@@ -161,6 +162,12 @@ weights (`tools/dsv41-zig/native/check_native.py`).
   (`HF_CACHE`, default `~/.cache/huggingface`), and an NFS export of that cache, read-only, to each worker's address
   on its link (see [NFS](#nfs)).
 - About 100 GB of free memory on each Spark (the weights take ~80 GiB a node).
+  `__vm_enough_memory` lines in `dmesg` with an HTTP 500 are the host's overcommit policy refusing one mapping, not the
+  model's size: with the default `vm.overcommit_memory=0` the kernel refuses a mapping larger than RAM plus swap.
+  Long conversations used to ask for such mappings while rendering the chat template (1,999 messages: 66 GiB touched
+  and refused reservations of 177-233 GB, [#36](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/36));
+  the template has written its pieces out since [#18](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/18),
+  so update first rather than changing the host's setting.
 
 ## Quick start
 
@@ -201,6 +208,53 @@ four ranks.
 To use Blackfrost-AI’s DERISKED FP8 checkpoint, set `DERISKED=1` in `scripts/local.sh`, or run
 `DERISKED=1 ./start-switchless.sh restart`. Set `DERISKED=0` to return to the original checkpoint.
 The first switch downloads and prepares separate weights; the API model id stays `DeepSeek-V4.1-Flash-1017`.
+
+## NVFP4 (opt-in)
+
+`NVFP4=1` serves [NVIDIA's NVFP4 release](https://huggingface.co/nvidia/DeepSeek-V4.1-Flash-1017-NVFP4) of the same model
+instead of DeepSeek's. Set it in `scripts/local.sh`, or run `NVFP4=1 ./start-switchless.sh restart`; `NVFP4=0` goes back.
+The first start downloads ~430 GB (one copy on spark1, as ever, read by the other three over NFS), writes four ~80 GB
+weight files and copies its ~105 GB of Engram tables to each worker's disk: have about 750 GB free on spark1 and 110 GB on
+each worker. The API model id stays `DeepSeek-V4.1-Flash-1017`.
+
+The two checkpoints differ in two places; everything else is DeepSeek's bytes:
+
+| | DeepSeek's release | `NVFP4=1` |
+| --- | --- | --- |
+| Routed experts (40 layers) | MXFP4 weights, FP8 activations | NVFP4 weights, 4-bit activations under each expert's calibrated `input_scale` |
+| Engram tables | FP8, ~203 GB | MXFP4, ~105 GB (lossy, per NVIDIA's card) |
+
+Patch `0037` runs them on GB10's block-scaled FP4 tensor-core instruction, which takes 64 inputs at a time and applies the
+scales in hardware; NVIDIA's expert weights dequantize to exactly DeepSeek's. The weight files and GPU memory stay the same
+size as DeepSeek's (the converter's per-16 scales come in equal pairs, kept per 32; the bake refuses a checkpoint where a
+pair differs). The DSpark drafter and the shared expert are unchanged. Replies are as exact as ever: 612 replies, the same
+token by token at every concurrency.
+
+Measured on this cluster (2026-10-31), the same benchmarks back to back, one idle server at a time. It is against the FP8
+image served until then (`0001`-`0025`), with `NVFP4=1` on `0001`-`0037`; aggregate tok/s, three kinds of text, greedy and T=1 (with our own decode and prefill
+benchmarks, which are not in this repository):
+
+| | c1 | c2 | c4 | c8 | c16 |
+| --- | --- | --- | --- | --- | --- |
+| Decode, `NVFP4=1` against FP8 (mean) | +1.1 % | +0.3 % | +1.7 % | +3.9 % | +6.4 % |
+| Range over the cells | -0.1 .. +2.9 | -4.0 .. +3.6 | -0.8 .. +2.8 | -0.6 .. +7.1 | +3.3 .. +8.2 |
+
+| Cold prompt | 4k | 16k | 65k | 131k |
+| --- | --- | --- | --- | --- |
+| FP8, s | 1.41 | 4.61 | 17.71 | 35.74 |
+| `NVFP4=1`, s | 1.33 | 4.38 | 16.92 | 34.27 |
+| Prefill speed | +6.2 % | +5.2 % | +4.7 % | +4.3 % |
+
+The gain is modest because the experts were already nearly at this machine's memory bandwidth: a kernel benchmark reads
+weights at 231 GB/s with `NVFP4=1` and 197-218 GB/s without, against 242 GB/s for a plain streaming read, and the weights'
+bytes do not shrink. Moving from `0025` also turns on `0031`'s admission under `TF_DS_PREFILL_YIELD=1`, which raises the
+first token of a burst of short prompts (16 at once: 1.3-1.7 s against 1.0-1.2 s); with the switch off it is level with
+FP8's (16 at once: 0.94-1.10 s against 0.98-1.12 s), but a long prompt then holds the other requests up.
+
+`ENGRAM_PACKED=1` reads FP8 tables and is refused with `NVFP4=1`. `ABLIT=1` works with it, on the same `attn.wo_b` bytes; that
+pairing is not one the overlay's author or NVIDIA has validated: `tools/validate.py` and a known-answer check here passed.
+NVIDIA's own accuracy results are on its model card (vLLM on GB300).
+`tools/dsv41-zig/native/check_nvfp4.py` checks the kernels against fp64 on real tensors.
 
 ## ABLIT (opt-in)
 
@@ -280,6 +334,22 @@ ring, mounts through spark2's routed address). With an export whose root (`fsid=
 `NFS_PATH=/huggingface` (the default). `scripts/prepare.sh` makes a docker volume `dsv41-hf` on each worker, mounts it
 and checks that every file a rank reads is there, at the right size.
 
+When a worker's load crawls or stalls, look at its path to spark1 first; these came from a four-Spark ring in
+[#21](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/21) and were not measured
+here. The worker across the ring reaches spark1 through a neighbour, and on that hop NFS ran at 9 MB/s until
+`net.ipv4.conf.all.send_redirects=0` on spark1, then 39 MB/s against 590 MB/s of raw TCP. A worker that reaches spark1
+over a management network can be given its fabric address with `FABRIC_PEER2` / `FABRIC_PEER3`. `MASTER_ADDR` is derived
+from this Spark's own addresses and passes over a Tailscale one (`100.64.0.0/10`) unless it has no other; set it
+yourself if the workers reach spark1 elsewhere.
+`RANK_LOCAL=1` (opt-in) gives each worker its weight file (~77-81 GB) on its own disk as well: `scripts/prepare.sh`
+copies the one a worker reads to `WORKER_RANK_DIR` (under `~/.cache/dsv41-tensorfold`), and `start.sh` mounts that copy
+when its name, size and modification time match spark1's, so a start reads no weights over NFS. A worker without a
+matching copy (short of disk, say) reads over NFS, with a warning. It costs ~80 GB on each worker. Copies are kept for
+each `DATA_SUB`, so `ABLIT` builds do not share them; a folder you no longer use, or the copies after going back to
+`RANK_LOCAL=0`, are yours to delete. On a four-GB10 ring [shalk3](https://github.com/shalk3) measured the engine's load
+at 315 s before and 96 s after, with one worker mounting over 2.5 GbE
+([#19](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/19)).
+
 ## Engram's packed rows (opt-in)
 
 Each decode round and prompt chunk reads Engram rows from two tables of ~384 million rows each (~203 GB). By default
@@ -303,6 +373,11 @@ The rows a layer reads are the same bytes either way, so replies should not chan
 check `tools/validate.py` and replies against the default path before you rely on it, with `TF_DS_DECODE_DEC=0` while
 the decode kernels' known issue stands, so a difference is the Engram path's. With packing on, the workers' old copies
 of the tables (`WORKER_ENGRAM_DIR`) are no longer read and can be removed.
+
+Either path is a random-read workload on whatever holds the tables, so a ZFS host wants its own dataset for them: on a
+pool's defaults every row read pulled a whole compressed record, and a 16k-token prompt took over 500 seconds to
+prefill. [`docs/engram-zfs-dataset.md`](docs/engram-zfs-dataset.md) has the settings that were measured, and the
+self-check that says whether the reads are direct.
 
 ## How it is split across the four Sparks
 
@@ -332,6 +407,7 @@ Settings come from the environment, then `scripts/local.sh`, then `./.env`, then
 
 | Setting | Default | |
 | --- | --- | --- |
+| `NVFP4` | 0 | set to 1 to load [NVIDIA's NVFP4 checkpoint](https://huggingface.co/nvidia/DeepSeek-V4.1-Flash-1017-NVFP4) ([above](#nvfp4-opt-in)); explicit `MODEL_ID` / `MODEL_REVISION` override it |
 | `DERISKED` | 0 | set to 1 to load [Blackfrost-AI’s DERISKED FP8 checkpoint](https://huggingface.co/Blackfrost-AI/DeepSeek-V4.1-Flash-1017-DERISKED-FP8); explicit `MODEL_ID` / `MODEL_REVISION` override it |
 | `ABLIT` | 0 | set to 1 for the Keys abliteration overlay ([above](#ablit-opt-in)); gated, needs `HF_TOKEN` |
 | `CONTEXT` | 1048576 | a request's positions at most (the model's window) |
@@ -344,6 +420,7 @@ Settings come from the environment, then `scripts/local.sh`, then `./.env`, then
 | `GRAPHS` / `SIDE` / `PREFETCH` | 1 / 1 / 1 | CUDA graphs, the side stream, the paced L2 prefetch |
 | `ENGRAM_PACKED` / `ENGRAM_OWNED` | 0 / 1 | Engram's rows from packed shards; each Spark its quarter of them ([above](#engrams-packed-rows-opt-in)) |
 | `ENGRAM_CACHE_MIB` / `ENGRAM_INSTREAM` | 2048 / 0 | with packing: the row cache a Spark; the round's wait as a stream host step |
+| `RANK_LOCAL` / `WORKER_RANK_DIR` | 0 / `~/.cache/dsv41-tensorfold/rank-cache-...` | each worker's weight file from its own disk ([NFS](#nfs)) |
 | `ROUND_MS` | measured table | a decode round's ms by its rows, the price the lane uses to choose drafts ([Performance](#performance)) |
 | `DRAFT_MS` | 25 | the one-stream draft chooser's per-round constant (`TF_DS_DRAFT_MS`) |
 | `SERVED_K` | solo | `solo`, `all` or `off`: where the per-stream draft chooser trims a round (`TF_DS_SAMPLE_CAND`, `TF_DS_PREPASS`, `TF_DS_EXPERT_EXIT`, `TF_DS_PREFILL_YIELD`, `TF_DS_DRAFT_ROW_MS` below are engine switches) |
@@ -351,7 +428,7 @@ Settings come from the environment, then `scripts/local.sh`, then `./.env`, then
 
 ## What the patches change
 
-[`zig/patches`](zig/patches) apply to BertholomusAI's fork at `5940208`, in order. Flags are off by default unless
+[`zig/patches`](zig/patches) apply to BertholomusAI's fork at `5940208`, in order. (The numbers skip `0038` and `0044`-`0045`, held for open work.) Flags are off by default unless
 marked **on**; "on, this cluster" means `scripts/local.sh` turns it on here, not the shipped default. Full
 measurements and rationale: [`CHANGELOG.md`](CHANGELOG.md); authorship: [`CREDITS.md`](CREDITS.md).
 
@@ -393,6 +470,13 @@ measurements and rationale: [`CHANGELOG.md`](CHANGELOG.md); authorship: [`CREDIT
 | `0034` | uchkw | -- (on with RDMA) | Parks idle RDMA proxies with a futex after all ranks quiesce; wakes before the next compute frame |
 | `0035` | Mia's AI Lab | `TF_DS_CONNECT_S` (300 s) | Rank 0 opens every worker's rendezvous port before loading its weights, so a worker that loads first waits there instead of exiting with `ConnectFailed` 300 s later ([#3](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/3)) |
 | `0036` | BobClawblaw, Ash Hart, bertholomus (ported by Mia's AI Lab) | -- (on) | Structured output and `tool_choice` required on the DeepSeek-V4.1 engine ([above](#structured-output-and-required-tool-calls); [#6](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/6))
+| `0037` | Mia's AI Lab, on Ash Hart's block-scaled FP4 instruction (`mma_fp4`) and activation format | `NVFP4` (the checkpoint's `moe_quant_algo` selects it) | NVIDIA's NVFP4 checkpoint: routed experts on the block-scaled MMA with each expert's own 4-bit activations, MXFP4 Engram rows ([above](#nvfp4-opt-in)) |
+| `0039` | SvangenStudios | -- (on) | A reply grammar that cannot be built at admission fails only its own request; setup no longer reports success for a freed job |
+| `0040` | SvangenStudios | -- (on) | Decode and drafter graph caches keep ownership of an executable whose first launch fails, so a destroyed handle is never launched or destroyed twice |
+| `0041` | SvangenStudios | -- (tests only) | The two opt-in grammar tests use the current `HfText` API, so the server tests compile again |
+| `0042` | SvangenStudios | -- (on) | A JSON answer (`response_format`, `guided_json`) stays content when `tools` are offered; it is not parsed as tool calls |
+| `0043` | SvangenStudios | -- (on) | A reply made only of orphan DSML closing tags gets `tensorfold.tool_parse_warning` (diagnostic only; [#14](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/14)) |
+| `0046` | shalk3 | `TF_DS_LOAD_PREFETCH` (on) | The weight loader's file is read ahead by 8 threads (32 MiB chunks, at most 4 GiB past the loader), so its reads come from the page cache: a node's load 83 s -> 27 s from NVMe; the weights are unchanged |
 
 ### Idle RDMA CPU use
 
@@ -407,6 +491,22 @@ On one four-GB10 switchless-ring deployment (2026-10-26), Container idle CPU fel
 full feature matrix. A repeated A/B/A/B recheck with 60-second cgroup CPU windows confirmed the reduction
 ([measurements](docs/idle-cpu-validation.md)). Shared-circuit wall-power readings were noisy and incomplete; no isolated watts-saved
 claim is made. Rebuild and replace all four images; weight conversion is not required for this patch.
+
+### Pinning the RDMA proxies
+
+`TF_DS_RDMA_CPUS=a,b,c` pins the three RDMA proxy threads to one CPU each, in the order four-node ring, column pair, row
+pair. Unset, the scheduler places them. The main thread is not affected. `start.sh` forwards every exported `TF_DS_*`
+variable to all ranks, so `export TF_DS_RDMA_CPUS=0,10,11` in `scripts/local.sh` is enough. While decoding the proxies
+still busy-poll, and a polling thread does not need a fast core: on a GB10, CPUs 0-4 and 10-14 are Cortex-A725
+(2.8 GHz) and 5-9 and 15-19 are Cortex-X925 (3.9 GHz).
+
+Check the value yourself: a CPU that does not exist or a word that is not a number leaves that proxy unpinned, with no
+message. `taskset -pc <tid>` on the proxy threads shows the result.
+
+[making](https://github.com/making) reports (four GB10 on a ring, one ~5,600-token decode, TSOC at the end of each
+phase) 59-67 °C with `0,10,11` against 70-81 °C unpinned, with no throughput change outside the drift from the growing
+context ([#40](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/40)). Only that one
+layout was tried and this repository has not measured it, so the default stays unpinned.
 
 ## Cached-image and late-request latency
 
@@ -459,8 +559,13 @@ part of this repository.
 
 - **[DeepSeek](https://huggingface.co/deepseek-ai)**: DeepSeek-V4.1-Flash-1017, its weights, its DSpark draft blocks
   and its reference inference code (MIT).
+- **[NVIDIA](https://huggingface.co/nvidia)**: [DeepSeek-V4.1-Flash-1017-NVFP4](https://huggingface.co/nvidia/DeepSeek-V4.1-Flash-1017-NVFP4),
+  the NVFP4 quantization `NVFP4=1` serves (MIT).
 - **[TensorFold](https://github.com/ashhart/TensorFold)** by Ash Hart ([ashhart](https://github.com/ashhart)) and the
-  TensorFold contributors (Apache-2.0): the native Zig engine and its OpenAI-compatible server.
+  TensorFold contributors (Apache-2.0): the native Zig engine and its OpenAI-compatible server; Ash Hart wrote the
+  block-scaled FP4 instruction form (`mma4.cuh`) and the 4-bit activation format (`nvfp4q.cuh`) patch `0037` is built on.
+- **[Zhehao Hu (Zhehao-Hu)](https://github.com/Zhehao-Hu)**: [vllm-project/vllm#61530](https://github.com/vllm-project/vllm/pull/61530),
+  whose documentation of the MXFP4 Engram rows patch `0037` reads the checkpoint by.
 - **[Mia's AI Lab](https://github.com/MiaAI-Lab/)**: this recipe; patches `0001`-`0007`, `0009`-`0025` in `zig/patches` (the checkpoint format on the
   native engine, the ring's node order and links, video input, tool-call arguments, kernel-variant fallbacks,
   alignment fixes, the prefill plan's WP0/WP1/WP2/WP4/WP5/WP6(a), the decode plan's G0.1-G0.3 and tracks A2/B/C/D/A3,
@@ -490,6 +595,15 @@ part of this repository.
   and **BertholomusAI ([bertholomus](https://github.com/bertholomus))**: the structured output that patch `0036`
   ports to this recipe (BobClawblaw's lane-core grammar and libtfgrammar, Ash Hart's required tool calls and
   grammar-aware drafting, bertholomus's DeepSeek-V4.1 hooks and DSML tool-call grammar).
+- **[SvangenStudios](https://github.com/SvangenStudios)**: patches `0039`-`0043`, and `stop.sh`'s and `start.sh`'s checks and
+  tests in [PR #24](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/24), [PR #25](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/25) and [PR #33](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/33).
+- **[shalk3](https://github.com/shalk3)**: patch `0046` ([PR #20](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/20)) and each worker's own weight file,
+  `RANK_LOCAL` ([PR #19](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/19)).
+- **Tyler Folkman ([tfolkman](https://github.com/tfolkman))**: the launcher locks kept out of persistent children
+  ([PR #22](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/22)), the switched mesh's NCCL bootstrap ([PR #23](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/23)) and the preparation utilities on the runtime
+  image ([PR #26](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/26)).
+- **Christopher A. Williamson ([cawilliamson](https://github.com/cawilliamson))**: the ZFS page for Engram's tables,
+  [`docs/engram-zfs-dataset.md`](docs/engram-zfs-dataset.md) ([PR #38](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/38)).
 - [xgrammar](https://github.com/mlc-ai/xgrammar) (Apache-2.0) with dlpack (Apache-2.0) and picojson (BSD-2-Clause),
   compiled into the image's `libtfgrammar.so`.
 - [PyAV](https://github.com/PyAV-Org/PyAV) (BSD-3-Clause), [Zig](https://ziglang.org) (MIT), NVIDIA's PyTorch
