@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 462" width="640" height="462" font-family="ui-sans-serif,system-ui" font-size="12">
+<rect width="640" height="462" fill="#ffffff"/>
+<text x="12" y="24" font-weight="600" fill="#16202A">Soak: request outcomes</text>
+<text x="12" y="49" fill="#5B6B7A">pr rep 0 · completions</text>
+<rect x="230" y="38" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="38" width="326.0" height="14" fill="#0F766E"/>
+<text x="628" y="49" text-anchor="end" fill="#16202A">163 </text>
+<text x="12" y="75" fill="#5B6B7A">pr rep 0 · aborts</text>
+<rect x="230" y="64" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="64" width="250.0" height="14" fill="#8FB3AE"/>
+<text x="628" y="75" text-anchor="end" fill="#16202A">125 </text>
+<text x="12" y="101" fill="#5B6B7A">pr rep 0 · errors</text>
+<rect x="230" y="90" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="90" width="2.0" height="14" fill="#8FB3AE"/>
+<text x="628" y="101" text-anchor="end" fill="#16202A">0 </text>
+<text x="12" y="127" fill="#5B6B7A">pr rep 0 · canary mismatches</text>
+<rect x="230" y="116" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="116" width="2.0" height="14" fill="#8FB3AE"/>
+<text x="628" y="127" text-anchor="end" fill="#16202A">0 </text>
+<text x="12" y="153" fill="#5B6B7A">pr rep 1 · completions</text>
+<rect x="230" y="142" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="142" width="326.0" height="14" fill="#0F766E"/>
+<text x="628" y="153" text-anchor="end" fill="#16202A">163 </text>
+<text x="12" y="179" fill="#5B6B7A">pr rep 1 · aborts</text>
+<rect x="230" y="168" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="168" width="252.0" height="14" fill="#8FB3AE"/>
+<text x="628" y="179" text-anchor="end" fill="#16202A">126 </text>
+<text x="12" y="205" fill="#5B6B7A">pr rep 1 · errors</text>
+<rect x="230" y="194" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="194" width="2.0" height="14" fill="#8FB3AE"/>
+<text x="628" y="205" text-anchor="end" fill="#16202A">0 </text>
+<text x="12" y="231" fill="#5B6B7A">pr rep 1 · canary mismatches</text>
+<rect x="230" y="220" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="220" width="2.0" height="14" fill="#8FB3AE"/>
+<text x="628" y="231" text-anchor="end" fill="#16202A">0 </text>
+<text x="12" y="257" fill="#5B6B7A">base rep 0 · completions</text>
+<rect x="230" y="246" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="246" width="322.0" height="14" fill="#0F766E"/>
+<text x="628" y="257" text-anchor="end" fill="#16202A">161 </text>
+<text x="12" y="283" fill="#5B6B7A">base rep 0 · aborts</text>
+<rect x="230" y="272" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="272" width="248.0" height="14" fill="#8FB3AE"/>
+<text x="628" y="283" text-anchor="end" fill="#16202A">124 </text>
+<text x="12" y="309" fill="#5B6B7A">base rep 0 · errors</text>
+<rect x="230" y="298" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="298" width="2.0" height="14" fill="#8FB3AE"/>
+<text x="628" y="309" text-anchor="end" fill="#16202A">0 </text>
+<text x="12" y="335" fill="#5B6B7A">base rep 0 · canary mismatches</text>
+<rect x="230" y="324" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="324" width="2.0" height="14" fill="#8FB3AE"/>
+<text x="628" y="335" text-anchor="end" fill="#16202A">0 </text>
+<text x="12" y="361" fill="#5B6B7A">base rep 1 · completions</text>
+<rect x="230" y="350" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="350" width="328.0" height="14" fill="#0F766E"/>
+<text x="628" y="361" text-anchor="end" fill="#16202A">164 </text>
+<text x="12" y="387" fill="#5B6B7A">base rep 1 · aborts</text>
+<rect x="230" y="376" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="376" width="254.0" height="14" fill="#8FB3AE"/>
+<text x="628" y="387" text-anchor="end" fill="#16202A">127 </text>
+<text x="12" y="413" fill="#5B6B7A">base rep 1 · errors</text>
+<rect x="230" y="402" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="402" width="2.0" height="14" fill="#8FB3AE"/>
+<text x="628" y="413" text-anchor="end" fill="#16202A">0 </text>
+<text x="12" y="439" fill="#5B6B7A">base rep 1 · canary mismatches</text>
+<rect x="230" y="428" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="428" width="2.0" height="14" fill="#8FB3AE"/>
+<text x="628" y="439" text-anchor="end" fill="#16202A">0 </text>
+</svg>
