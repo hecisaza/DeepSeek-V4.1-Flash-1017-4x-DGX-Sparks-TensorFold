@@ -1,0 +1,23 @@
+{
+ "class": "READY",
+ "label": "evidence:ready",
+ "historical": false,
+ "reasons": [
+  "every suite green, no slowdown beyond the band; the pull request's own tests fail on the base and pass on the pull request, and the second opinion inspected them and found them sound"
+ ],
+ "facts": [
+  "suites on `pr`: smoke \u2713 \u00b7 boundary \u2713 \u00b7 cutin \u2713 \u00b7 perf \u2713 \u00b7 soak \u2713 \u00b7 startup \u2713",
+  "replies: 19/19 identical to the control",
+  "performance against the control (provisional calibration): decode +1% (\u00b12%) \u00b7 prefill -0% (\u00b12%) \u00b7 aggregate -0% (\u00b16%) \u00b7 cut-in -18% (\u00b13%, 0.07 s apart, below the 0.2 s floor: not called) \u00b7 startup -1% (\u00b110%, one sample a side: not called)",
+  "cut-in admission (short request answered before the long prompt's first token): candidate yes, control yes",
+  "the PR's own tests: confirmed (1 file(s): on the PR passes, on the base with the PR's tests fails)",
+  "second opinion: EVIDENCE SUPPORTS THE CLAIM; claim test: NONE; author tests: SOUND",
+  "patch numbers: no collision with another open pull request",
+  "restore: live restored (verified: API answers, running artifact is live's)",
+  "run manifest: PR open at execution; candidate merged onto the current base; head 78f1b064, base fcef6cf2; engine switches: lab"
+ ],
+ "verified": [
+  "the pull request's own tests fail on the base and pass on the pull request, and the second opinion inspected them and found them sound"
+ ],
+ "not_verified": []
+}
