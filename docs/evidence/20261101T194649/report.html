@@ -1,0 +1,200 @@
+<title>Aggregate: tokens per second over concurrent streams</title>
+<style>:root{--bg:#F1F4F6;--ink:#16202A;--muted:#5B6B7A;--line:#D6DDE3;--code:#E8EDF1;--accent:#0F766E}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#0F1519;--ink:#E6EBEF;--muted:#94A3B0;--line:#2A3540;--code:#121A21;--accent:#2DD4BF}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#0F1519;--ink:#E6EBEF;--muted:#94A3B0;--line:#2A3540;--code:#121A21;--accent:#2DD4BF}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 ui-sans-serif,system-ui,sans-serif;padding:0 20px;padding-block:28px 48px;max-width:1000px;margin:0 auto}
+h1{font-size:26px;margin:0 0 6px} h2{font-size:18px;margin:28px 0 8px} p{margin:6px 0} li{margin:3px 0}
+code{font-family:ui-monospace,Menlo,monospace;font-size:12.5px;background:var(--code);padding:1px 5px;border-radius:4px}
+table{border-collapse:collapse;width:100%;font-size:13.5px;margin:8px 0} td,th{padding:5px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top} th{color:var(--muted);font-weight:600}
+svg{max-width:100%;height:auto;border:1px solid var(--line);margin:8px 0} details{color:var(--muted);font-size:13px} strong{color:var(--accent)}</style>
+<div><h1>Evidence: pr vs base</h1>
+<table>
+<tr><th>target</th><th>role</th><th>image / artifact</th><th>model</th><th>settings that differ from the control</th></tr>
+<tr><td><code>pr</code></td><td>candidate</td><td><code>tensorfold-dsv41:pr-0430154e</code> (17f50370b8ea)</td><td><code>DeepSeek-V4.1-Flash-1017</code></td><td>-</td></tr>
+<tr><td><code>base</code></td><td>control</td><td><code>tensorfold-dsv41:base-476bbc77</code> (3014a9d4e74f)</td><td><code>DeepSeek-V4.1-Flash-1017</code></td><td>baseline</td></tr>
+</table>
+<p>Conditions: fabric ring; order: A then B, one repetition (no reverse order: pass --opt reps=2 for a counterbalanced run); repetitions: 1; kit c66ae62.</p>
+<p>Restore: live restored (verified: API answers, running artifact is live&#x27;s).</p>
+<h2>smoke</h2>
+<table>
+<tr><th>target</th><th>rep</th><th>arithmetic</th><th>greedy repeat equal</th><th>stream matches</th><th>JSON mode</th><th>first token (stream)</th><th>errors</th></tr>
+<tr><td><code>pr</code></td><td>0</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>0.092 s</td><td>-</td></tr>
+<tr><td><code>base</code></td><td>0</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>0.09 s</td><td>-</td></tr>
+</table>
+<details><summary>machine state after the suite</summary>
+<li><code>pr</code> rep 0: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2184 MHz, 51, [N/A], [N/A], 8 %&quot;], &quot;load&quot;: &quot;load average: 3.64, 1.81, 0.99&quot;, &quot;mem_available_mb&quot;: &quot;27545&quot;}}</code></li>
+<li><code>base</code> rep 0: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2177 MHz, 58, [N/A], [N/A], 91 %&quot;], &quot;load&quot;: &quot;load average: 4.02, 5.27, 4.16&quot;, &quot;mem_available_mb&quot;: &quot;28268&quot;}}</code></li>
+</details>
+<h2>boundary</h2>
+<p><strong>19 of 19</strong> greedy reply hashes identical, <code>pr</code> against <code>base</code>, over 1 repetition(s).</p>
+<table>
+<tr><th>rep</th><th>prompt</th><th>tokens (pr / base)</th><th><code>pr</code></th><th><code>base</code></th><th>same</th></tr>
+<tr><td>0</td><td>len5</td><td>5 / 5</td><td><code>38127fef0fbb</code></td><td><code>38127fef0fbb</code></td><td>✓</td></tr>
+<tr><td>0</td><td>len2047</td><td>2047 / 2047</td><td><code>8488ccfbcf35</code></td><td><code>8488ccfbcf35</code></td><td>✓</td></tr>
+<tr><td>0</td><td>len2048</td><td>2048 / 2048</td><td><code>c5ac2fb76516</code></td><td><code>c5ac2fb76516</code></td><td>✓</td></tr>
+<tr><td>0</td><td>len2049</td><td>2049 / 2049</td><td><code>6766401c9caa</code></td><td><code>6766401c9caa</code></td><td>✓</td></tr>
+<tr><td>0</td><td>len4095</td><td>4095 / 4095</td><td><code>ed9e5086f520</code></td><td><code>ed9e5086f520</code></td><td>✓</td></tr>
+<tr><td>0</td><td>len4096</td><td>4096 / 4096</td><td><code>52584e31f990</code></td><td><code>52584e31f990</code></td><td>✓</td></tr>
+<tr><td>0</td><td>len4097</td><td>4097 / 4097</td><td><code>1a71db317ee7</code></td><td><code>1a71db317ee7</code></td><td>✓</td></tr>
+<tr><td>0</td><td>len6143</td><td>6143 / 6143</td><td><code>2f9626e9baf5</code></td><td><code>2f9626e9baf5</code></td><td>✓</td></tr>
+<tr><td>0</td><td>len6144</td><td>6144 / 6144</td><td><code>11933f2d4bd7</code></td><td><code>11933f2d4bd7</code></td><td>✓</td></tr>
+<tr><td>0</td><td>len6145</td><td>6145 / 6145</td><td><code>7aa2f63b2547</code></td><td><code>7aa2f63b2547</code></td><td>✓</td></tr>
+<tr><td>0</td><td>len8193</td><td>8193 / 8193</td><td><code>2ef3dc011922</code></td><td><code>2ef3dc011922</code></td><td>✓</td></tr>
+<tr><td>0</td><td>len12289</td><td>12289 / 12289</td><td><code>4fcfbd64881f</code></td><td><code>4fcfbd64881f</code></td><td>✓</td></tr>
+<tr><td>0</td><td>pfx_base</td><td>5124 / 5124</td><td><code>52afe4842e5d</code></td><td><code>52afe4842e5d</code></td><td>✓</td></tr>
+<tr><td>0</td><td>pfx_div3072</td><td>3376 / 3376</td><td><code>64d23fe171dc</code></td><td><code>64d23fe171dc</code></td><td>✓</td></tr>
+<tr><td>0</td><td>pfx_div2044</td><td>2348 / 2348</td><td><code>16db99ba02f2</code></td><td><code>16db99ba02f2</code></td><td>✓</td></tr>
+<tr><td>0</td><td>pfx_div4092</td><td>4396 / 4396</td><td><code>63798c5ba36c</code></td><td><code>63798c5ba36c</code></td><td>✓</td></tr>
+<tr><td>0</td><td>pfx_div4093</td><td>4397 / 4397</td><td><code>6b1cfc31884d</code></td><td><code>6b1cfc31884d</code></td><td>✓</td></tr>
+<tr><td>0</td><td>pfx_base_again</td><td>5124 / 5124</td><td><code>52afe4842e5d</code></td><td><code>52afe4842e5d</code></td><td>✓</td></tr>
+<tr><td>0</td><td>pfx_extend</td><td>6660 / 6660</td><td><code>357a869fef18</code></td><td><code>357a869fef18</code></td><td>✓</td></tr>
+</table>
+<details><summary>machine state after the suite</summary>
+<li><code>pr</code> rep 0: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2177 MHz, 61, [N/A], [N/A], 0 %&quot;], &quot;load&quot;: &quot;load average: 4.97, 2.36, 1.20&quot;, &quot;mem_available_mb&quot;: &quot;27874&quot;}}</code></li>
+<li><code>base</code> rep 0: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2171 MHz, 62, [N/A], [N/A], 0 %&quot;], &quot;load&quot;: &quot;load average: 5.39, 5.46, 4.26&quot;, &quot;mem_available_mb&quot;: &quot;27931&quot;}}</code></li>
+</details>
+<h2>cutin</h2>
+<p><code>pr</code> rep 0: short question first token <strong>0.44 s</strong> (rounds 0.398–0.483), long prompt first token 20.23 s (rounds 20.162–20.495); 3 rounds; admitted during the long prefill in 3 of 3 rounds</p>
+<p><code>base</code> rep 0: short question first token <strong>0.38 s</strong> (rounds 0.359–0.409), long prompt first token 20.23 s (rounds 20.079–20.306); 3 rounds; admitted during the long prefill in 3 of 3 rounds</p>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 150" width="640" height="150" font-family="ui-sans-serif,system-ui" font-size="12">
+<rect width="640" height="150" fill="#ffffff"/>
+<text x="12" y="24" font-weight="600" fill="#16202A">Cut-in: seconds to first token, a short question 3 s behind a cold long prompt</text>
+<text x="12" y="49" fill="#5B6B7A">pr rep 0 · short question</text>
+<rect x="230" y="38" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="38" width="7.1" height="14" fill="#0F766E"/>
+<text x="628" y="49" text-anchor="end" fill="#16202A">0.44 s</text>
+<text x="12" y="75" fill="#5B6B7A">pr rep 0 · long prompt</text>
+<rect x="230" y="64" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="64" width="328.0" height="14" fill="#8FB3AE"/>
+<text x="628" y="75" text-anchor="end" fill="#16202A">20.23 s</text>
+<text x="12" y="101" fill="#5B6B7A">base rep 0 · short question</text>
+<rect x="230" y="90" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="90" width="6.2" height="14" fill="#8FB3AE"/>
+<text x="628" y="101" text-anchor="end" fill="#16202A">0.38 s</text>
+<text x="12" y="127" fill="#5B6B7A">base rep 0 · long prompt</text>
+<rect x="230" y="116" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="116" width="328.0" height="14" fill="#8FB3AE"/>
+<text x="628" y="127" text-anchor="end" fill="#16202A">20.23 s</text>
+</svg>
+<details><summary>machine state after the suite</summary>
+<li><code>pr</code> rep 0: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2177 MHz, 70, [N/A], [N/A], 96 %&quot;], &quot;load&quot;: &quot;load average: 6.77, 3.36, 1.62&quot;, &quot;mem_available_mb&quot;: &quot;27811&quot;}}</code></li>
+<li><code>base</code> rep 0: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2177 MHz, 67, [N/A], [N/A], 0 %&quot;], &quot;load&quot;: &quot;load average: 7.39, 6.02, 4.53&quot;, &quot;mem_available_mb&quot;: &quot;27817&quot;}}</code></li>
+</details>
+<h2>perf</h2>
+<table>
+<tr><th>target</th><th>rep</th><th>decode tok/s, one stream</th><th>prefill tok/s, cold long prompt</th><th>aggregate tok/s, concurrent streams</th><th>errors</th></tr>
+<tr><td><code>pr</code></td><td>0</td><td><strong>56.9</strong> (53.4–60.9)</td><td><strong>3184.9</strong> (3164.8–3194.3; 12004 tokens)</td><td><strong>141.2</strong> (128.1–144.5; 4 streams)</td><td>-</td></tr>
+<tr><td><code>base</code></td><td>0</td><td><strong>56.7</strong> (55.9–60.2)</td><td><strong>3166.4</strong> (3064.6–3180.7; 12004 tokens)</td><td><strong>140.3</strong> (137.4–142.6; 4 streams)</td><td>-</td></tr>
+</table>
+<p><code>pr</code> against <code>base</code>: decode +0.4%, prefill +0.6%, aggregate +0.6% (medians over repetitions; the verdict counts a difference only beyond the rounds&#x27; spread, at least ±3 %).</p>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 98" width="640" height="98" font-family="ui-sans-serif,system-ui" font-size="12">
+<rect width="640" height="98" fill="#ffffff"/>
+<text x="12" y="24" font-weight="600" fill="#16202A">Decode: tokens per second, one stream</text>
+<text x="12" y="49" fill="#5B6B7A">pr rep 0</text>
+<rect x="230" y="38" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="38" width="328.0" height="14" fill="#0F766E"/>
+<text x="628" y="49" text-anchor="end" fill="#16202A">56.9 tok/s</text>
+<text x="12" y="75" fill="#5B6B7A">base rep 0</text>
+<rect x="230" y="64" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="64" width="326.8" height="14" fill="#8FB3AE"/>
+<text x="628" y="75" text-anchor="end" fill="#16202A">56.7 tok/s</text>
+</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 98" width="640" height="98" font-family="ui-sans-serif,system-ui" font-size="12">
+<rect width="640" height="98" fill="#ffffff"/>
+<text x="12" y="24" font-weight="600" fill="#16202A">Prefill: prompt tokens per second, cold long prompt</text>
+<text x="12" y="49" fill="#5B6B7A">pr rep 0</text>
+<rect x="230" y="38" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="38" width="328.0" height="14" fill="#0F766E"/>
+<text x="628" y="49" text-anchor="end" fill="#16202A">3184.9 tok/s</text>
+<text x="12" y="75" fill="#5B6B7A">base rep 0</text>
+<rect x="230" y="64" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="64" width="326.1" height="14" fill="#8FB3AE"/>
+<text x="628" y="75" text-anchor="end" fill="#16202A">3166.4 tok/s</text>
+</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 98" width="640" height="98" font-family="ui-sans-serif,system-ui" font-size="12">
+<rect width="640" height="98" fill="#ffffff"/>
+<text x="12" y="24" font-weight="600" fill="#16202A">Aggregate: tokens per second over concurrent streams</text>
+<text x="12" y="49" fill="#5B6B7A">pr rep 0</text>
+<rect x="230" y="38" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="38" width="328.0" height="14" fill="#0F766E"/>
+<text x="628" y="49" text-anchor="end" fill="#16202A">141.2 tok/s</text>
+<text x="12" y="75" fill="#5B6B7A">base rep 0</text>
+<rect x="230" y="64" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="64" width="325.9" height="14" fill="#8FB3AE"/>
+<text x="628" y="75" text-anchor="end" fill="#16202A">140.3 tok/s</text>
+</svg>
+<details><summary>machine state after the suite</summary>
+<li><code>pr</code> rep 0: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2171 MHz, 66, [N/A], [N/A], 96 %&quot;], &quot;load&quot;: &quot;load average: 6.37, 3.69, 1.80&quot;, &quot;mem_available_mb&quot;: &quot;27530&quot;}}</code></li>
+<li><code>base</code> rep 0: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2171 MHz, 67, [N/A], [N/A], 96 %&quot;], &quot;load&quot;: &quot;load average: 6.51, 5.97, 4.58&quot;, &quot;mem_available_mb&quot;: &quot;27425&quot;}}</code></li>
+</details>
+<h2>startup</h2>
+<p><code>pr</code>: 172.0 s from the switch to the API answering (1 start(s))</p>
+<p><code>base</code>: 168.3 s from the switch to the API answering (1 start(s))</p>
+<h2>soak</h2>
+<p><code>pr</code> rep 0: 164 completions, 126 client aborts, <strong>0 errors</strong>, 57 canary checks with <strong>0 mismatches</strong></p>
+<p>  machine samples, first and last: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2184 MHz, 62, [N/A], [N/A], 0 %&quot;], &quot;load&quot;: &quot;load average: 6.37, 3.69, 1.80&quot;, &quot;mem_available_mb&quot;: &quot;27493&quot;}}</code> → <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2177 MHz, 70, [N/A], [N/A], 96 %&quot;], &quot;load&quot;: &quot;load average: 6.37, 6.19, 4.03&quot;, &quot;mem_available_mb&quot;: &quot;26301&quot;}}</code></p>
+<p><code>base</code> rep 0: 162 completions, 125 client aborts, <strong>0 errors</strong>, 57 canary checks with <strong>0 mismatches</strong></p>
+<p>  machine samples, first and last: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2177 MHz, 65, [N/A], [N/A], 40 %&quot;], &quot;load&quot;: &quot;load average: 6.51, 5.97, 4.58&quot;, &quot;mem_available_mb&quot;: &quot;27408&quot;}}</code> → <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2177 MHz, 69, [N/A], [N/A], 96 %&quot;], &quot;load&quot;: &quot;load average: 6.20, 6.45, 5.53&quot;, &quot;mem_available_mb&quot;: &quot;26343&quot;}}</code></p>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 254" width="640" height="254" font-family="ui-sans-serif,system-ui" font-size="12">
+<rect width="640" height="254" fill="#ffffff"/>
+<text x="12" y="24" font-weight="600" fill="#16202A">Soak: request outcomes</text>
+<text x="12" y="49" fill="#5B6B7A">pr rep 0 · completions</text>
+<rect x="230" y="38" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="38" width="328.0" height="14" fill="#0F766E"/>
+<text x="628" y="49" text-anchor="end" fill="#16202A">164 </text>
+<text x="12" y="75" fill="#5B6B7A">pr rep 0 · aborts</text>
+<rect x="230" y="64" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="64" width="252.0" height="14" fill="#8FB3AE"/>
+<text x="628" y="75" text-anchor="end" fill="#16202A">126 </text>
+<text x="12" y="101" fill="#5B6B7A">pr rep 0 · errors</text>
+<rect x="230" y="90" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="90" width="2.0" height="14" fill="#8FB3AE"/>
+<text x="628" y="101" text-anchor="end" fill="#16202A">0 </text>
+<text x="12" y="127" fill="#5B6B7A">pr rep 0 · canary mismatches</text>
+<rect x="230" y="116" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="116" width="2.0" height="14" fill="#8FB3AE"/>
+<text x="628" y="127" text-anchor="end" fill="#16202A">0 </text>
+<text x="12" y="153" fill="#5B6B7A">base rep 0 · completions</text>
+<rect x="230" y="142" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="142" width="324.0" height="14" fill="#0F766E"/>
+<text x="628" y="153" text-anchor="end" fill="#16202A">162 </text>
+<text x="12" y="179" fill="#5B6B7A">base rep 0 · aborts</text>
+<rect x="230" y="168" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="168" width="250.0" height="14" fill="#8FB3AE"/>
+<text x="628" y="179" text-anchor="end" fill="#16202A">125 </text>
+<text x="12" y="205" fill="#5B6B7A">base rep 0 · errors</text>
+<rect x="230" y="194" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="194" width="2.0" height="14" fill="#8FB3AE"/>
+<text x="628" y="205" text-anchor="end" fill="#16202A">0 </text>
+<text x="12" y="231" fill="#5B6B7A">base rep 0 · canary mismatches</text>
+<rect x="230" y="220" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="220" width="2.0" height="14" fill="#8FB3AE"/>
+<text x="628" y="231" text-anchor="end" fill="#16202A">0 </text>
+</svg>
+<details><summary>machine state after the suite</summary>
+<li><code>pr</code> rep 0: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2184 MHz, 60, [N/A], [N/A], 0 %&quot;], &quot;load&quot;: &quot;load average: 6.37, 6.27, 4.19&quot;, &quot;mem_available_mb&quot;: &quot;26397&quot;}}</code></li>
+<li><code>base</code> rep 0: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2184 MHz, 61, [N/A], [N/A], 0 %&quot;], &quot;load&quot;: &quot;load average: 5.70, 6.29, 5.53&quot;, &quot;mem_available_mb&quot;: &quot;26350&quot;}}</code></li>
+</details>
+<h2>repro</h2>
+<table>
+<tr><th>target</th><th>role</th><th>rep</th><th>exit</th><th>outcome</th><th>expected</th><th>as expected</th></tr>
+<tr><td><code>pr</code></td><td>candidate</td><td>0</td><td>0</td><td>passes</td><td>passes</td><td>✓</td></tr>
+<tr><td><code>base</code></td><td>control</td><td>0</td><td>1</td><td>fails</td><td>fails</td><td>✓</td></tr>
+</table>
+<p><strong>Reproduced on the control and gone on the candidate</strong> (every repetition).</p>
+<p>Command: <code>bash claim.sh {api} {model} {logcmd}</code></p>
+<details><summary>output of the script (tail)</summary>
+<li><code>pr</code> rep 0: <code>fold&quot;}]}&#x27; GET with body, then GET: the next request on the kept connection parsed from its own request line DELETE with body, then GET: first  -&gt; 404 &#x27;{&quot;error&quot;: {&quot;message&quot;: &quot;no stored response has id \&#x27;resp_claim0044_does_not_exist\&#x27;&quot;, &quot;type&quot;: &quot;invalid_request_error&quot;, &quot;param&quot;: &quot;response_id&quot;, &quot;code&quot;: null}}&#x27; DELETE with body, then GET: second -&gt; 200 &#x27;{&quot;object&quot;: &quot;list&quot;, &quot;data&quot;: [{&quot;id&quot;: &quot;DeepSeek-V4.1-Flash-1017&quot;, &quot;object&quot;: &quot;model&quot;, &quot;created&quot;: 1793563332, &quot;owned_by&quot;: &quot;tensorfold&quot;}]}&#x27; DELETE with body, then GET: the next request on the kept connection parsed from its own request line CLAIM: holds </code></li>
+<li><code>base</code> rep 0: <code>ssage&quot;: &quot;no stored response has id \&#x27;resp_claim0044_does_not_exist\&#x27;&quot;, &quot;type&quot;: &quot;invalid_request_error&quot;, &quot;param&quot;: &quot;response_id&quot;, &quot;code&quot;: null}}&#x27; DELETE with body, then GET: second -&gt; 501 &#x27;&lt;!DOCTYPE HTML&gt;\n&lt;html lang=&quot;en&quot;&gt;\n    &lt;head&gt;\n        &lt;meta charset=&quot;utf-8&quot;&gt;\n        &lt;style type=&quot;text/css&quot;&gt;\n            :root {\n                color-scheme: lig&#x27; DELETE with body, then GET: error page says: &lt;p&gt;Message: Unsupported method (&#x27;probe=0044&amp;amp;scanner=1GET&#x27;).&lt;/p&gt; DELETE with body, then GET: the next request on the kept connection failed with the probe&#x27;s bytes in the reply CLAIM: does not hold </code></li>
+</details>
+<details><summary>machine state after the suite</summary>
+<li><code>pr</code> rep 0: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2184 MHz, 60, [N/A], [N/A], 0 %&quot;], &quot;load&quot;: &quot;load average: 6.18, 6.23, 4.19&quot;, &quot;mem_available_mb&quot;: &quot;26373&quot;}}</code></li>
+<li><code>base</code> rep 0: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2184 MHz, 60, [N/A], [N/A], 0 %&quot;], &quot;load&quot;: &quot;load average: 5.70, 6.29, 5.53&quot;, &quot;mem_available_mb&quot;: &quot;26348&quot;}}</code></li>
+</details>
+<h2>the pull request&#x27;s own tests</h2>
+<p>The pull request adds or changes no test file under <code>tests/</code>.</p>
+<h2>What this run does not show</h2>
+<li>a clean pair exit and recovery after an injected read fault (<code>fault</code> did not run)</li>
+<li>an external benchmark against a control (The Grill or similar) (<code>bench</code> did not run)</li>
+<li>&lt;!-- add: paths only checked by reading, faults not injected, configurations not run --&gt;</li>
+<p><em>Generated by inference-agent-kit <code>report.py</code> from <code>20261101T194649/results.json</code>.</em></p></div>
