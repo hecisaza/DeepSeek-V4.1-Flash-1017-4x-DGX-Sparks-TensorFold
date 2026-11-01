@@ -85,8 +85,8 @@ jobs:
           if [[ "$PR_INPUT" =~ ^https://github\.com/([^/]+/[^/]+)/pull/([0-9]+) ]]; then PR_REPO=${BASH_REMATCH[1]}; PR=${BASH_REMATCH[2]}
           else PR_REPO=$THIS_REPO; PR=$PR_INPUT; fi
           { echo "PR_REPO=$PR_REPO"; echo "PR=$PR"
-            gh pr view "$PR" -R "$PR_REPO" --json headRefOid,baseRefOid,headRefName,baseRefName,isCrossRepository,url,mergeable,potentialMergeCommit \
-              --jq '"HEAD_SHA=\(.headRefOid)\nBASE_SHA=\(.baseRefOid)\nHEAD_REF=\(.headRefName)\nBASE_REF=\(.baseRefName)\nPR_URL=\(.url)\nCROSS=\(.isCrossRepository)\nMERGEABLE=\(.mergeable)\nMERGE_SHA=\(.potentialMergeCommit.oid // "")"'
+            gh pr view "$PR" -R "$PR_REPO" --json headRefOid,baseRefOid,headRefName,baseRefName,isCrossRepository,url,mergeable,potentialMergeCommit,state,mergedAt,closedAt \
+              --jq '"HEAD_SHA=\(.headRefOid)\nBASE_SHA=\(.baseRefOid)\nHEAD_REF=\(.headRefName)\nBASE_REF=\(.baseRefName)\nPR_URL=\(.url)\nCROSS=\(.isCrossRepository)\nMERGEABLE=\(.mergeable)\nMERGE_SHA=\(.potentialMergeCommit.oid // "")\nPR_STATE=\(.state | ascii_downcase)\nPR_CLOSED_AT=\(.mergedAt // .closedAt // "")"'
           } | tee -a "$GITHUB_ENV"
           # evidence goes to the PR branch only when that branch lives in this repository
           if [ "$PR_REPO" = "$THIS_REPO" ] && grep -q "^CROSS=false" "$GITHUB_ENV"; then echo "EVIDENCE_REF=$(grep ^HEAD_REF= "$GITHUB_ENV" | tail -1 | cut -d= -f2-)" >> "$GITHUB_ENV"
@@ -109,7 +109,16 @@ jobs:
           { echo "CAND_SHA=$CAND_SHA"; echo "BASE_SHA=$BASE_SHA"; echo "CAND_KIND=$CAND_KIND"; } >> "$GITHUB_ENV"
           git checkout -q "$CAND_SHA"
           mkdir -p ../base && git archive "$BASE_SHA" | tar -x -C ../base
-          echo "PR $PR_URL: head ${HEAD_SHA::8} ($HEAD_REF) $CAND_KIND; candidate ${CAND_SHA::8}, base ${BASE_SHA::8} ($BASE_REF)"
+          # a PR that changes engine defaults also gets a run on defaults (the standard run uses the lab's production switches)
+          if git diff --name-only "$BASE_SHA" "$CAND_SHA" | grep -qE '^scripts/(config\.sh|local\.sh\.example)$'; then echo "DEFAULTS_RUN=1" >> "$GITHUB_ENV"; else echo "DEFAULTS_RUN=0" >> "$GITHUB_ENV"; fi
+          # the run manifest: what was tested, in which state, pinned (copied into every run directory)
+          python3 - <<PY
+          import json
+          json.dump({"pr_repo": "$PR_REPO", "pr": $PR, "pr_url": "$PR_URL", "pr_state": "$PR_STATE", "pr_closed_at": "$PR_CLOSED_AT", "head_sha": "$HEAD_SHA", "base_sha": "$BASE_SHA", "candidate_sha": "$CAND_SHA",
+                     "candidate_kind": "$CAND_KIND", "head_ref": "$HEAD_REF", "base_ref": "$BASE_REF", "switches": "lab", "workflow_run": "${{ github.run_id }}", "dispatched_by": "${{ github.actor }}", "event": "${{ github.event_name }}"},
+                    open("run-manifest.json", "w"), indent=1)
+          PY
+          echo "PR $PR_URL ($PR_STATE): head ${HEAD_SHA::8} ($HEAD_REF) $CAND_KIND; candidate ${CAND_SHA::8}, base ${BASE_SHA::8} ($BASE_REF); defaults run: $DEFAULTS_RUN"
 
       - name: Upstream state (stage 0, on the repository the PR belongs to)
         run: |
@@ -120,9 +129,11 @@ jobs:
         run: |
           IMAGE="tensorfold-dsv41:pr-${CAND_SHA::8}"; BASE_IMAGE="tensorfold-dsv41:base-${BASE_SHA::8}"
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"; echo "BASE_IMAGE=$BASE_IMAGE" >> "$GITHUB_ENV"
-          # the base (main without the PR) is the control; the lab's local.sh goes to both checkouts without its engine
-          # settings (TF_* lines), so the PR's defaults and the base's defaults are what runs
-          ssh -o BatchMode=yes hisaza@192.168.1.123 "grep -vE '^[[:space:]]*(export[[:space:]]+)?TF_' ~/ds41-4x/scripts/local.sh" > local.lab.sh
+          # the base (main without the PR) is the control; both checkouts get the lab's local.sh as the lab runs it (its
+          # engine switches included, so the cut-in suite measures admission); a defaults variant without TF_* lines is
+          # used for a second run when the PR changes a default
+          ssh -o BatchMode=yes hisaza@192.168.1.123 "cat ~/ds41-4x/scripts/local.sh" > local.lab.sh
+          grep -vE '^[[:space:]]*(export[[:space:]]+)?TF_' local.lab.sh > local.defaults.sh
           for pair in "./:ds41-pr" "../base/:ds41-base"; do
             src=${pair%%:*}; dir=${pair##*:}
             rsync -a --delete --exclude .git "$src" hisaza@192.168.1.161:$dir/
@@ -146,7 +157,17 @@ jobs:
           echo "claim=$([ "$R" = claim.sh ] && echo yes || echo none)" >> "$GITHUB_OUTPUT"
           if [ -n "$R" ]; then OPTS=(--opt "repro_cmd=bash $R {api} {model} {logcmd}"); case ",$S," in *,repro,*) ;; *) S="$S,repro";; esac; fi
           echo "SUITES_RUN=$S" >> "$GITHUB_ENV"
-          "$KIT/scripts/pairtest" run --lab lab.run.yaml --target pr --compare base --suite "$S" --runs runs --opt "reps=$REPS" "${OPTS[@]}"
+          "$KIT/scripts/pairtest" run --lab lab.run.yaml --target pr --compare base --suite "$S" --runs runs --opt "reps=$REPS" "${OPTS[@]}"; rc=$?
+          RUN=$(ls -t runs | head -1); echo "RUN=$RUN" >> "$GITHUB_ENV"; cp run-manifest.json "runs/$RUN/run-manifest.json"
+          [ -z "$R" ] || cp "$R" "runs/$RUN/executed-script.sh"
+          if [ "$DEFAULTS_RUN" = 1 ]; then
+            # the PR changes an engine default: the same pair once more on defaults (no lab switches on either side)
+            for dir in ds41-pr ds41-base; do scp -q local.defaults.sh hisaza@192.168.1.123:$dir/scripts/local.sh; done
+            "$KIT/scripts/pairtest" run --lab lab.run.yaml --target pr --compare base --suite "$S" --runs runs --opt "reps=$REPS" --opt conditions=defaults "${OPTS[@]}" || rc=$?
+            RUN2=$(ls -t runs | head -1); [ "$RUN2" != "$RUN" ] && { echo "RUN2=$RUN2" >> "$GITHUB_ENV"; python3 -c "import json,sys; m=json.load(open('run-manifest.json')); m['switches']='defaults'; json.dump(m, open(sys.argv[1],'w'), indent=1)" "runs/$RUN2/run-manifest.json"; [ -z "$R" ] || cp "$R" "runs/$RUN2/executed-script.sh"; }
+            for dir in ds41-pr ds41-base; do scp -q local.lab.sh hisaza@192.168.1.123:$dir/scripts/local.sh; done
+          fi
+          exit $rc
 
       - name: Restore the live server (belt and braces)
         if: always()
@@ -157,24 +178,29 @@ jobs:
         if: always() && steps.test.outcome != 'skipped'
         timeout-minutes: 20
         run: |
-          RUN=$(ls -t runs 2>/dev/null | head -1); [ -n "$RUN" ] || exit 0
+          [ -n "${RUN:-}" ] || exit 0
           "$KIT/scripts/hosttests.sh" --pr . --base ../base --out "runs/$RUN/hosttests.json" | tee -a "$GITHUB_STEP_SUMMARY"
-          python3 "$KIT/scripts/report.py" "runs/$RUN" >/dev/null   # the report now carries the host-tests section
+          [ -z "${RUN2:-}" ] || cp "runs/$RUN/hosttests.json" "runs/$RUN2/hosttests.json"
+          for r in $RUN ${RUN2:-}; do python3 "$KIT/scripts/report.py" "runs/$r" >/dev/null; done   # the reports carry the host-tests section
 
       - name: Second opinion on the evidence (a different model, read-only; never fails the run)
         if: always() && steps.test.outcome != 'skipped'
         timeout-minutes: 30
         run: |
-          RUN=$(ls -t runs 2>/dev/null | head -1); [ -n "$RUN" ] || exit 0
+          [ -n "${RUN:-}" ] || exit 0
           gh pr view "$PR" -R "$PR_REPO" --json title,body --jq '"\(.title)\n\n\(.body)"' > pr.md || true
-          "$KIT/scripts/evidence-review.sh" "runs/$RUN" --checkout . --base "$BASE_SHA" --head "$CAND_SHA" --pr-url "$PR_URL" --pr-file pr.md --timeout 25 || true
+          for r in $RUN ${RUN2:-}; do
+            "$KIT/scripts/evidence-review.sh" "runs/$r" --checkout . --base "$BASE_SHA" --head "$CAND_SHA" --pr-url "$PR_URL" --pr-file pr.md --script "runs/$r/executed-script.sh" --timeout 25 || true
+          done
 
       - name: Merge readiness (computed from the results, the second opinion and the open PRs; a person merges)
         id: verdict
         if: always() && steps.test.outcome != 'skipped'
         run: |
-          RUN=$(ls -t runs 2>/dev/null | head -1); [ -n "$RUN" ] || exit 0
-          "$KIT/scripts/verdict.py" "runs/$RUN" --review "runs/$RUN/REVIEW.md" --sync sync.txt --pr "$PR" --pr-file pr.md || true
+          [ -n "${RUN:-}" ] || exit 0
+          for r in $RUN ${RUN2:-}; do
+            "$KIT/scripts/verdict.py" "runs/$r" --review "runs/$r/REVIEW.md" --sync sync.txt --pr "$PR" --pr-file pr.md --noise "$KIT/lab.noise.json" --manifest "runs/$r/run-manifest.json" || true
+          done
           CLS=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['class'])" "runs/$RUN/verdict.json" 2>/dev/null || echo "")
           { echo "verdict=$CLS"; echo "pr_url=$PR_URL"; echo "pr_repo=$PR_REPO"; echo "pr=$PR"; echo "suites=$SUITES"; echo "reps=$REPS"; } >> "$GITHUB_OUTPUT"
           # the class as a label, on PRs of this repository only
@@ -187,20 +213,23 @@ jobs:
       - name: Evidence to the PR branch (or an evidence/ branch here for a PR elsewhere)
         if: always()
         run: |
-          RUN=$(ls -t runs 2>/dev/null | head -1); [ -n "$RUN" ] || exit 0
-          echo "RUN=$RUN" >> "$GITHUB_ENV"
-          git checkout -q --detach "$HEAD_SHA" 2>/dev/null || true   # the evidence commit sits on the PR head, not on the test merge
-          mkdir -p "docs/evidence/$RUN"
-          cp "runs/$RUN/report.md" "runs/$RUN/report.html" "docs/evidence/$RUN/" 2>/dev/null || true
-          cp runs/"$RUN"/*.svg "docs/evidence/$RUN/" 2>/dev/null || true
-          cp "runs/$RUN/REVIEW.md" "runs/$RUN/VERDICT.md" "docs/evidence/$RUN/" 2>/dev/null || true
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/evidence
-          git commit -q -m "evidence: $RUN (automated test run of $PR_URL)" || exit 0
-          case "$EVIDENCE_REF" in evidence/*) FORCE=--force;; *) FORCE=;; esac
-          git push -q $FORCE "https://x-access-token:$GH_TOKEN@github.com/$THIS_REPO.git" "HEAD:refs/heads/$EVIDENCE_REF"
-          echo "evidence: https://github.com/$THIS_REPO/tree/$EVIDENCE_REF/docs/evidence/$RUN"
+          [ -n "${RUN:-}" ] || exit 0
+          # every run directory, with its raw data, goes to an append-only evidence branch (one per PR, orphan history)
+          collect() { mkdir -p "$2"; for f in report.md report.html results.json hosttests.json REVIEW.md review-missing.txt VERDICT.md verdict.json run-manifest.json executed-script.sh log-public.txt; do cp "runs/$1/$f" "$2/" 2>/dev/null || true; done; cp runs/"$1"/*.svg "$2/" 2>/dev/null || true; }
+          SLUG=$(tr / - <<<"$PR_REPO"); EB="evidence/$SLUG-pr-$PR"
+          rm -rf evbr && git init -q evbr && (cd evbr && git config user.name "github-actions[bot]" && git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            if git fetch -q "https://x-access-token:$GH_TOKEN@github.com/$THIS_REPO.git" "refs/heads/$EB" 2>/dev/null; then git checkout -q FETCH_HEAD; else git checkout -q --orphan evidence; fi)
+          for r in $RUN ${RUN2:-}; do collect "$r" "evbr/docs/evidence/$r"; done
+          (cd evbr && git add -A && git commit -q -m "evidence: $RUN${RUN2:+ and $RUN2} — $PR_URL ($PR_STATE), head ${HEAD_SHA::8}, base ${BASE_SHA::8}, candidate ${CAND_SHA::8} ($CAND_KIND)" && git push -q "https://x-access-token:$GH_TOKEN@github.com/$THIS_REPO.git" "HEAD:refs/heads/$EB")
+          echo "EVIDENCE_REF=$EB" >> "$GITHUB_ENV"
+          echo "evidence: https://github.com/$THIS_REPO/tree/$EB/docs/evidence/$RUN"
+          # a PR of this repository also gets the evidence on its own branch (summary files only)
+          if [ "$PR_REPO" = "$THIS_REPO" ] && [ "$CROSS" = false ]; then
+            git checkout -q --detach "$HEAD_SHA" 2>/dev/null || true
+            for r in $RUN ${RUN2:-}; do mkdir -p "docs/evidence/$r"; cp "runs/$r/report.md" "runs/$r/VERDICT.md" "runs/$r/REVIEW.md" "docs/evidence/$r/" 2>/dev/null || true; done
+            git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add docs/evidence && git commit -q -m "evidence: $RUN (automated test run of $PR_URL)" && git push -q "https://x-access-token:$GH_TOKEN@github.com/$THIS_REPO.git" "HEAD:refs/heads/$HEAD_REF" || true
+          fi
 
       - name: Comment on the PR (here), or write the comment to the run summary (a PR elsewhere)
         if: always()
@@ -209,9 +238,10 @@ jobs:
           STATUS="${{ steps.test.outcome }}"
           [ "${{ steps.build.outcome }}" = failure ] && STATUS="build failed (nothing was tested)"
           {
-            echo "**Automated test run** on the lab's Sparks: $PR_URL, \`${HEAD_SHA::8}\` ${CAND_KIND:-against its base} vs base \`${BASE_SHA::8}\`, suites ${SUITES_RUN:-$SUITES}: **$STATUS** (job [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}))"
+            echo "**Automated test run** on the lab's Sparks: $PR_URL (${PR_STATE:-state unknown} at execution), \`${HEAD_SHA::8}\` ${CAND_KIND:-against its base} vs base \`${BASE_SHA::8}\`, suites ${SUITES_RUN:-$SUITES}, lab switches: **$STATUS** (job [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}))"
             echo
             if [ -n "$RUN" ] && [ -s "runs/$RUN/VERDICT.md" ]; then cat "runs/$RUN/VERDICT.md"; echo; fi
+            if [ -n "${RUN2:-}" ] && [ -s "runs/$RUN2/VERDICT.md" ]; then echo "**On engine defaults (the PR changes a default):**"; echo; cat "runs/$RUN2/VERDICT.md"; echo; fi
             if [ -n "$RUN" ] && [ -f "runs/$RUN/report.md" ]; then sed -n '1,200p' "runs/$RUN/report.md"; else echo "_no report was produced; see the job log_"; fi
             echo
             if [ -n "$RUN" ] && [ -s "runs/$RUN/REVIEW.md" ]; then
@@ -219,7 +249,7 @@ jobs:
             elif [ -n "$RUN" ] && [ -s "runs/$RUN/review-missing.txt" ]; then
               echo "_No second opinion this run: $(cat "runs/$RUN/review-missing.txt")_"; echo
             fi
-            if [ -n "$RUN" ]; then echo "_Full evidence: [docs/evidence/$RUN/](https://github.com/$THIS_REPO/tree/$EVIDENCE_REF/docs/evidence/$RUN) (report.html, charts). Posted by the spark-test workflow._"; else echo "_Posted by the spark-test workflow._"; fi
+            if [ -n "$RUN" ]; then echo "_Full evidence: [docs/evidence/$RUN/](https://github.com/$THIS_REPO/tree/$EVIDENCE_REF/docs/evidence/$RUN) (report, raw results.json, the executed script, the second opinion, the manifest). Posted by the spark-test workflow._"; else echo "_Posted by the spark-test workflow._"; fi
           } > comment.md
           if [ "$PR_REPO" = "$THIS_REPO" ]; then gh pr comment "$PR" -R "$THIS_REPO" --body-file comment.md
           else { echo "The PR is in $PR_REPO: nothing was posted there. The comment, ready to paste:"; echo; cat comment.md; } >> "$GITHUB_STEP_SUMMARY"; fi
@@ -243,6 +273,8 @@ jobs:
             runs/*/review/pr.patch
             runs/*/review/PR.md
             runs/*/hosttests.json
+            runs/*/run-manifest.json
+            runs/*/executed-script.sh
           if-no-files-found: ignore
 
       - name: Remove older PR and base images from the Sparks
