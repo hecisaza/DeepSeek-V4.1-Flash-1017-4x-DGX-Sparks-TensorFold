@@ -1,0 +1,24 @@
+{
+ "class": "RERUN",
+ "label": "evidence:rerun",
+ "historical": false,
+ "reasons": [
+  "the second opinion finds the evidence unreliable"
+ ],
+ "facts": [
+  "suites on `pr`: smoke \u2713 \u00b7 boundary \u2713 \u00b7 cutin \u2713 \u00b7 perf \u2713 \u00b7 soak \u2713 \u00b7 startup \u2713",
+  "replies: 38/38 identical to the control",
+  "claim script: confirmed (2 repetition(s))",
+  "performance against the control (provisional calibration): decode +1% (\u00b12%) \u00b7 prefill -1% (\u00b12%) \u00b7 aggregate -1% (\u00b16%) \u00b7 cut-in -6% (\u00b13%, 0.02 s apart, below the 0.2 s floor: not called) \u00b7 startup -0% (\u00b110%, one sample a side: not called)",
+  "cut-in admission (short request answered before the long prompt's first token): candidate yes, control yes",
+  "the PR's own tests: no tests",
+  "second opinion: EVIDENCE UNRELIABLE; claim test: UNSOUND; author tests: NONE",
+  "patch numbers: no collision with another open pull request",
+  "restore: live restored (verified: API answers, running artifact is live's)",
+  "run manifest: PR open at execution; candidate head against its merge-base 476bbc77 (the PR does not merge cleanly onto the current base); head 0430154e, base 476bbc77; engine switches: lab"
+ ],
+ "verified": [],
+ "not_verified": [
+  "the claim script fails on the base and passes on the candidate, but its oracle was not inspected (second opinion: UNSOUND)"
+ ]
+}
