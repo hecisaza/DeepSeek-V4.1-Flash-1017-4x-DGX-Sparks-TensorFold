@@ -57,7 +57,7 @@ rank's rendezvous address). Full list: [Credits](#credits) and [`CREDITS.md`](CR
 (knapcio), `0027` (Thomas Kempka), `0028` and `0029` (upstream TensorFold fixes backported by Mauvis Ledford), `0030`
 and `0031` (Mauvis Ledford), `0033` (a backport by Manuel, manuel1618), `0034` (Hironori Uchikawa, uchkw), `0036`
 (upstream TensorFold's structured output by BobClawblaw and Ash Hart, and BertholomusAI's DeepSeek-V4.1 part of it,
-ported here), `0039`-`0043` (SvangenStudios) and `0046` (shalk3)** -- see
+ported here), `0037`'s `mma_fp4` and activation format (Ash Hart's, from TensorFold), `0039`-`0043` (SvangenStudios) and `0046` (shalk3)** -- see
 [What the patches change](#what-the-patches-change) and [Credits](#credits) for who found or shaped each specific fix
 along the way.
 
@@ -66,6 +66,7 @@ along the way.
 - [Performance](#performance)
 - [Requirements](#requirements)
 - [Quick start](#quick-start)
+- [NVFP4 (opt-in)](#nvfp4-opt-in)
 - [ABLIT (opt-in)](#ablit-opt-in)
 - [Images and video](#images-and-video)
 - [Structured output and required tool calls](#structured-output-and-required-tool-calls)
@@ -207,6 +208,53 @@ four ranks.
 To use Blackfrost-AI’s DERISKED FP8 checkpoint, set `DERISKED=1` in `scripts/local.sh`, or run
 `DERISKED=1 ./start-switchless.sh restart`. Set `DERISKED=0` to return to the original checkpoint.
 The first switch downloads and prepares separate weights; the API model id stays `DeepSeek-V4.1-Flash-1017`.
+
+## NVFP4 (opt-in)
+
+`NVFP4=1` serves [NVIDIA's NVFP4 release](https://huggingface.co/nvidia/DeepSeek-V4.1-Flash-1017-NVFP4) of the same model
+instead of DeepSeek's. Set it in `scripts/local.sh`, or run `NVFP4=1 ./start-switchless.sh restart`; `NVFP4=0` goes back.
+The first start downloads ~430 GB (one copy on spark1, as ever, read by the other three over NFS), writes four ~80 GB
+weight files and copies its ~105 GB of Engram tables to each worker's disk: have about 750 GB free on spark1 and 110 GB on
+each worker. The API model id stays `DeepSeek-V4.1-Flash-1017`.
+
+The two checkpoints differ in two places; everything else is DeepSeek's bytes:
+
+| | DeepSeek's release | `NVFP4=1` |
+| --- | --- | --- |
+| Routed experts (40 layers) | MXFP4 weights, FP8 activations | NVFP4 weights, 4-bit activations under each expert's calibrated `input_scale` |
+| Engram tables | FP8, ~203 GB | MXFP4, ~105 GB (lossy, per NVIDIA's card) |
+
+Patch `0037` runs them on GB10's block-scaled FP4 tensor-core instruction, which takes 64 inputs at a time and applies the
+scales in hardware; NVIDIA's expert weights dequantize to exactly DeepSeek's. The weight files and GPU memory stay the same
+size as DeepSeek's (the converter's per-16 scales come in equal pairs, kept per 32; the bake refuses a checkpoint where a
+pair differs). The DSpark drafter and the shared expert are unchanged. Replies are as exact as ever: 612 replies, the same
+token by token at every concurrency.
+
+Measured on this cluster (2026-10-31), the same benchmarks back to back, one idle server at a time. It is against the FP8
+image served until then (`0001`-`0025`), with `NVFP4=1` on `0001`-`0037`; aggregate tok/s, three kinds of text, greedy and T=1 (with our own decode and prefill
+benchmarks, which are not in this repository):
+
+| | c1 | c2 | c4 | c8 | c16 |
+| --- | --- | --- | --- | --- | --- |
+| Decode, `NVFP4=1` against FP8 (mean) | +1.1 % | +0.3 % | +1.7 % | +3.9 % | +6.4 % |
+| Range over the cells | -0.1 .. +2.9 | -4.0 .. +3.6 | -0.8 .. +2.8 | -0.6 .. +7.1 | +3.3 .. +8.2 |
+
+| Cold prompt | 4k | 16k | 65k | 131k |
+| --- | --- | --- | --- | --- |
+| FP8, s | 1.41 | 4.61 | 17.71 | 35.74 |
+| `NVFP4=1`, s | 1.33 | 4.38 | 16.92 | 34.27 |
+| Prefill speed | +6.2 % | +5.2 % | +4.7 % | +4.3 % |
+
+The gain is modest because the experts were already nearly at this machine's memory bandwidth: a kernel benchmark reads
+weights at 231 GB/s with `NVFP4=1` and 197-218 GB/s without, against 242 GB/s for a plain streaming read, and the weights'
+bytes do not shrink. Moving from `0025` also turns on `0031`'s admission under `TF_DS_PREFILL_YIELD=1`, which raises the
+first token of a burst of short prompts (16 at once: 1.3-1.7 s against 1.0-1.2 s); with the switch off it is level with
+FP8's (16 at once: 0.94-1.10 s against 0.98-1.12 s), but a long prompt then holds the other requests up.
+
+`ENGRAM_PACKED=1` reads FP8 tables and is refused with `NVFP4=1`. `ABLIT=1` works with it, on the same `attn.wo_b` bytes; that
+pairing is not one the overlay's author or NVIDIA has validated: `tools/validate.py` and a known-answer check here passed.
+NVIDIA's own accuracy results are on its model card (vLLM on GB300).
+`tools/dsv41-zig/native/check_nvfp4.py` checks the kernels against fp64 on real tensors.
 
 ## ABLIT (opt-in)
 
@@ -359,6 +407,7 @@ Settings come from the environment, then `scripts/local.sh`, then `./.env`, then
 
 | Setting | Default | |
 | --- | --- | --- |
+| `NVFP4` | 0 | set to 1 to load [NVIDIA's NVFP4 checkpoint](https://huggingface.co/nvidia/DeepSeek-V4.1-Flash-1017-NVFP4) ([above](#nvfp4-opt-in)); explicit `MODEL_ID` / `MODEL_REVISION` override it |
 | `DERISKED` | 0 | set to 1 to load [Blackfrost-AI’s DERISKED FP8 checkpoint](https://huggingface.co/Blackfrost-AI/DeepSeek-V4.1-Flash-1017-DERISKED-FP8); explicit `MODEL_ID` / `MODEL_REVISION` override it |
 | `ABLIT` | 0 | set to 1 for the Keys abliteration overlay ([above](#ablit-opt-in)); gated, needs `HF_TOKEN` |
 | `CONTEXT` | 1048576 | a request's positions at most (the model's window) |
@@ -379,7 +428,7 @@ Settings come from the environment, then `scripts/local.sh`, then `./.env`, then
 
 ## What the patches change
 
-[`zig/patches`](zig/patches) apply to BertholomusAI's fork at `5940208`, in order. (The numbers skip `0037`-`0038` and `0044`-`0045`, held for open work.) Flags are off by default unless
+[`zig/patches`](zig/patches) apply to BertholomusAI's fork at `5940208`, in order. (The numbers skip `0038` and `0044`-`0045`, held for open work.) Flags are off by default unless
 marked **on**; "on, this cluster" means `scripts/local.sh` turns it on here, not the shipped default. Full
 measurements and rationale: [`CHANGELOG.md`](CHANGELOG.md); authorship: [`CREDITS.md`](CREDITS.md).
 
@@ -421,6 +470,7 @@ measurements and rationale: [`CHANGELOG.md`](CHANGELOG.md); authorship: [`CREDIT
 | `0034` | uchkw | -- (on with RDMA) | Parks idle RDMA proxies with a futex after all ranks quiesce; wakes before the next compute frame |
 | `0035` | Mia's AI Lab | `TF_DS_CONNECT_S` (300 s) | Rank 0 opens every worker's rendezvous port before loading its weights, so a worker that loads first waits there instead of exiting with `ConnectFailed` 300 s later ([#3](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/3)) |
 | `0036` | BobClawblaw, Ash Hart, bertholomus (ported by Mia's AI Lab) | -- (on) | Structured output and `tool_choice` required on the DeepSeek-V4.1 engine ([above](#structured-output-and-required-tool-calls); [#6](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/6))
+| `0037` | Mia's AI Lab, on Ash Hart's block-scaled FP4 instruction (`mma_fp4`) and activation format | `NVFP4` (the checkpoint's `moe_quant_algo` selects it) | NVIDIA's NVFP4 checkpoint: routed experts on the block-scaled MMA with each expert's own 4-bit activations, MXFP4 Engram rows ([above](#nvfp4-opt-in)) |
 | `0039` | SvangenStudios | -- (on) | A reply grammar that cannot be built at admission fails only its own request; setup no longer reports success for a freed job |
 | `0040` | SvangenStudios | -- (on) | Decode and drafter graph caches keep ownership of an executable whose first launch fails, so a destroyed handle is never launched or destroyed twice |
 | `0041` | SvangenStudios | -- (tests only) | The two opt-in grammar tests use the current `HfText` API, so the server tests compile again |
@@ -509,8 +559,13 @@ part of this repository.
 
 - **[DeepSeek](https://huggingface.co/deepseek-ai)**: DeepSeek-V4.1-Flash-1017, its weights, its DSpark draft blocks
   and its reference inference code (MIT).
+- **[NVIDIA](https://huggingface.co/nvidia)**: [DeepSeek-V4.1-Flash-1017-NVFP4](https://huggingface.co/nvidia/DeepSeek-V4.1-Flash-1017-NVFP4),
+  the NVFP4 quantization `NVFP4=1` serves (MIT).
 - **[TensorFold](https://github.com/ashhart/TensorFold)** by Ash Hart ([ashhart](https://github.com/ashhart)) and the
-  TensorFold contributors (Apache-2.0): the native Zig engine and its OpenAI-compatible server.
+  TensorFold contributors (Apache-2.0): the native Zig engine and its OpenAI-compatible server; Ash Hart wrote the
+  block-scaled FP4 instruction form (`mma4.cuh`) and the 4-bit activation format (`nvfp4q.cuh`) patch `0037` is built on.
+- **[Zhehao Hu (Zhehao-Hu)](https://github.com/Zhehao-Hu)**: [vllm-project/vllm#61530](https://github.com/vllm-project/vllm/pull/61530),
+  whose documentation of the MXFP4 Engram rows patch `0037` reads the checkpoint by.
 - **[Mia's AI Lab](https://github.com/MiaAI-Lab/)**: this recipe; patches `0001`-`0007`, `0009`-`0025` in `zig/patches` (the checkpoint format on the
   native engine, the ring's node order and links, video input, tool-call arguments, kernel-variant fallbacks,
   alignment fixes, the prefill plan's WP0/WP1/WP2/WP4/WP5/WP6(a), the decode plan's G0.1-G0.3 and tracks A2/B/C/D/A3,

@@ -75,7 +75,7 @@ log "Image $IMAGE identical on all 4 Sparks"
 
 # ---------------------------------------------------------------- 3. the checkpoint
 command -v hf >/dev/null || die "the Hugging Face CLI ('hf') is not installed on this Spark: pip install -U huggingface_hub"
-log "Downloading $MODEL_ID${MODEL_REVISION:+ @ ${MODEL_REVISION:0:8}} into $HF_CACHE/hub (~510 GB the first time; resumes)"
+log "Downloading $MODEL_ID${MODEL_REVISION:+ @ ${MODEL_REVISION:0:8}} into $HF_CACHE/hub ($MODEL_SIZE the first time; resumes)"
 if ! hf download "$MODEL_ID" ${MODEL_REVISION:+--revision "$MODEL_REVISION"} --cache-dir "$HF_CACHE/hub" >/dev/null; then
   [[ -n "$MODEL_REVISION" && -f "$(model_cache_dir)/snapshots/$MODEL_REVISION/model.safetensors.index.json" ]] ||
     die "$MODEL_ID: the download failed"

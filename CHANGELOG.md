@@ -7,6 +7,14 @@
 - **2026-11-01** -- `MASTER_ADDR` is derived from a Tailscale address (`100.64.0.0/10`) only when the Spark has no other
   ([n1ur0](https://github.com/n1ur0), [#21](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/21)).
   `worker_nfs` runs on the runtime image too, the last utility left on `BASE_IMAGE` after Tyler Folkman's change below.
+- **2026-10-31** -- `0037`, `NVFP4=1`: [NVIDIA's NVFP4 release](https://huggingface.co/nvidia/DeepSeek-V4.1-Flash-1017-NVFP4)
+  of the model. Routed experts on GB10's block-scaled FP4 MMA (`mma_fp4`, Ash Hart's in TensorFold) with each expert's own
+  4-bit activations (`tf_dsn_nv_quant`, TensorFold's format), MXFP4 Engram rows decoded on the host, the DSpark stages and
+  the shared expert unchanged; weight files and GPU memory the size of DeepSeek's. `check_nvfp4.py` on real tensors:
+  weights equal the source's MXFP4 exactly, quantizer bit-exact, decode and prefill kernels within 4e-10 of fp64, row
+  bits independent of the launch. Against the FP8 image then served: prefill +4.3 to +6.2 %, decode +1.1 % at c1, +0.3 % at
+  c2, +1.7 % at c4, +3.9 % at c8, +6.4 % at c16 ([README](README.md#nvfp4-opt-in)); `tools/validate.py` all passed, 612 replies
+  equal at every concurrency.
 - **2026-10-29** -- (Tyler Folkman, tfolkman) The launcher's lock descriptors stay out of persistent children: a surviving
   ssh or `docker logs -f` could hold `start.lock` or `prepare.lock` after its launcher exited and block the next start
   (`tests/test_launcher_locks.py`). On a switch, NCCL's bootstrap uses a RoCE subnet every rank shares, chosen the same way

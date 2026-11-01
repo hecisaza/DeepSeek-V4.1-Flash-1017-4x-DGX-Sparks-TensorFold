@@ -10,10 +10,21 @@ DGX Sparks. Almost everything that makes it work was built by others. Its own wo
   [DeepSeek](https://huggingface.co/deepseek-ai): the model, its weights (MIT, Copyright (c) 2023 DeepSeek) and its
   reference inference code. The weights are not part of this repository; `scripts/prepare.sh` downloads them from
   Hugging Face and serves them as published.
+- **[DeepSeek-V4.1-Flash-1017-NVFP4](https://huggingface.co/nvidia/DeepSeek-V4.1-Flash-1017-NVFP4)** by
+  [NVIDIA](https://huggingface.co/nvidia): the NVFP4 quantization of DeepSeek's model that `NVFP4=1` serves (routed experts
+  NVFP4 with calibrated 4-bit activations, Engram tables MXFP4), made with
+  [NVIDIA Model Optimizer](https://github.com/NVIDIA/Model-Optimizer) (MIT). The weights are not part of this repository;
+  `scripts/prepare.sh` downloads them from Hugging Face and serves them as published.
 - The native FP8 / MXFP4 kernels in `zig/patches` compute what DeepSeek's reference inference code computes
   (`inference/model.py`'s `linear`, `Expert` and `MoE`; `inference/kernel.py`'s `act_quant`, `fp8_gemm` and `fp4_gemm`;
   `inference/convert.py`'s bf16 `wo_a`): the arithmetic rules were read there and written anew in CUDA; no DeepSeek
   code is included.
+- Patch `0037`'s NVFP4 kernels are Mia's AI Lab's, on two pieces [Ash Hart](https://github.com/ashhart) wrote in
+  TensorFold (Apache-2.0): the block-scaled FP4 tensor-core instruction of `zig/kernels/cuda/mma4.cuh` (`mma_fp4`, ported
+  as it stands) and the 4-bit activation format of `zig/kernels/cuda/nvfp4q.cuh` (an E4M3 scale of `amax / 6` per 16 values,
+  E2M1 codes to nearest). The MXFP4 Engram rows are read as Zhehao Hu ([Zhehao-Hu](https://github.com/Zhehao-Hu))
+  documents the checkpoint in [vllm-project/vllm#61530](https://github.com/vllm-project/vllm/pull/61530) (even column in
+  the low nibble, an E8M0 scale per 32 values); that rule was read there and written anew in Zig, no vLLM code is included.
 - **[Keys abliteration overlay for DeepSeek-V4.1-Flash-1017](https://huggingface.co/drowzeys/keys-DeepSeek-V4.1-Flash-1017-Abliterated)**
   by drowzeys: the `attn.wo_b` (layers 10-35) weights `ABLIT=1` grafts onto the checkpoint, gated (MIT). Not part of
   this repository; `scripts/prepare.sh` downloads the sidecar and builds the overlaid checkpoint view when set.
@@ -48,8 +59,8 @@ DGX Sparks. Almost everything that makes it work was built by others. Its own wo
 Thomas Kempka's, `0028` and `0029`, upstream TensorFold fixes backported by Mauvis Ledford, `0030` and `0031`, which are
 Mauvis Ledford's, `0033`, a backport by Manuel (manuel1618), `0034`, which is Hironori Uchikawa's (uchkw,
 Codex-assisted), `0036`, a port of upstream TensorFold's structured output (BobClawblaw, Ash Hart) and of
-BertholomusAI's DeepSeek-V4.1 part of it (bertholomus), `0039`-`0043`, which are SvangenStudios's, and `0046`, which is
-shalk3's.** At a glance:
+BertholomusAI's DeepSeek-V4.1 part of it (bertholomus), `0037`, whose `mma_fp4` and activation format are Ash Hart's from
+TensorFold, `0039`-`0043`, which are SvangenStudios's, and `0046`, which is shalk3's.** At a glance:
 
 | Patches | Author | What |
 | --- | --- | --- |
@@ -67,6 +78,7 @@ shalk3's.** At a glance:
 | `0034` | Hironori Uchikawa ([uchkw](https://github.com/uchkw)) (Codex-assisted) | globally quiesce and futex-park idle RDMA proxies; wake before compute |
 | `0035` | Mia's AI Lab | rank 0's rendezvous ports open before its weights load, so a worker that loads first waits |
 | `0036` | BobClawblaw, [Ash Hart](https://github.com/ashhart), [bertholomus](https://github.com/bertholomus); ported by Mia's AI Lab | structured output and required tool calls (below) |
+| `0037` | Mia's AI Lab, on [Ash Hart](https://github.com/ashhart)'s `mma_fp4` and activation format (`mma4.cuh`, `nvfp4q.cuh`) | NVIDIA's NVFP4 checkpoint (`NVFP4=1`) on the block-scaled FP4 MMA, MXFP4 Engram rows |
 | `0039` | [SvangenStudios](https://github.com/SvangenStudios) | a reply grammar that cannot start fails its request (no use of the freed job) |
 | `0040` | [SvangenStudios](https://github.com/SvangenStudios) | cached CUDA graph executables stay owned by their cache after a failed first launch |
 | `0041` | [SvangenStudios](https://github.com/SvangenStudios) | the server tests compile again (two opt-in grammar tests on the current `HfText` API) |

@@ -32,6 +32,12 @@ DeepSeek-V4.1-Flash-1017
   The native FP8 / MXFP4 kernels in zig/patches follow the arithmetic of DeepSeek's reference inference code
   (inference/model.py, kernel.py, convert.py), written anew; no DeepSeek code is included.
 
+DeepSeek-V4.1-Flash-1017-NVFP4 (NVFP4=1)
+  https://huggingface.co/nvidia/DeepSeek-V4.1-Flash-1017-NVFP4
+  NVIDIA's NVFP4 quantization of DeepSeek-V4.1-Flash-1017, made with NVIDIA Model Optimizer. MIT License. The weights are
+  downloaded by scripts/prepare.sh, not distributed here. zig/patches/0037 ports TensorFold's mma_fp4 (zig/kernels/cuda/mma4.cuh,
+  Ash Hart, Apache License 2.0) and follows its activation format (nvfp4q.cuh).
+
 Chat template (model/chat_template.jinja)
   https://huggingface.co/Mia-AiLab/DeepSeek-V4.1-Flash-EXL3-2.9bpw
   Written by Mia's AI Lab (Mia-AiLab): a port of the checkpoint's encoding/encoding.py (DeepSeek, MIT) to Jinja.

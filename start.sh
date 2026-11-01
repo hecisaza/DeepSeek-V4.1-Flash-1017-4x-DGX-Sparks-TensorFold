@@ -19,7 +19,7 @@
 #            ENGRAM_INSTREAM, ROUND_MS, DRAFT_MS, SERVED_K
 #   nodes    WORKER, WORKER2, WORKER3, FABRIC_PEER*, MASTER_ADDR, MASTER_PORT, SOCKET_IFNAME, ORDER, NCCL_CHANNELS,
 #            NCCL_DEBUG
-#   files    DERISKED, MODEL_ID, MODEL_REVISION, HF_CACHE, NFS_PATH, NFS_SERVER*, NFS_VOLUME, STATE_DIR, LOG_DIR, LOG_KEEP
+#   files    DERISKED, NVFP4, MODEL_ID, MODEL_REVISION, HF_CACHE, NFS_PATH, NFS_SERVER*, NFS_VOLUME, STATE_DIR, LOG_DIR, LOG_KEEP
 #   engine   TF_REPO, TF_REF, KIT_REPO, KIT_REF, ZIG_VERSION, BASE_IMAGE, IMAGE, CONTAINER_NAME
 #   setup    PREPARE (auto | 1 | 0), WAIT_TIMEOUT (seconds, default 2400), DRY_RUN=1
 #   ranks    every TENSORFOLD_* and TF_DS_* variable you set goes to every rank
@@ -55,7 +55,7 @@ source ./scripts/banner.sh
 echo
 banner
 printf '\n%s  Mia'"'"'s TensorFold Start Script%s\n' "$M" "$R"
-printf '%s  %s · 4 x DGX Spark · %s at once · %s-token window · native FP8 / MXFP4 · port %s%s\n\n' "$D" "$MODEL_ID" "$PARALLEL" "$CONTEXT" "$PORT" "$R"
+printf '%s  %s · 4 x DGX Spark · %s at once · %s-token window · %s · port %s%s\n\n' "$D" "$MODEL_ID" "$PARALLEL" "$CONTEXT" "$MODEL_FORMAT" "$PORT" "$R"
 STEPS=5
 step() { printf '%s[%s/%s]%s %s%s%s\n' "$M" "$1" "$STEPS" "$R" "$B" "$2" "$R"; }
 
@@ -90,7 +90,7 @@ esac
 if (( need_prepare )); then
   if (( DRY )); then log "DRY_RUN: scripts/prepare.sh would run now (not ready yet)"
   else
-    log "Not ready yet: running scripts/prepare.sh (the first time this builds the image, downloads ~510 GB and writes four ~80 GB weight files)"
+    log "Not ready yet: running scripts/prepare.sh (the first time this builds the image, downloads $MODEL_SIZE and writes four ~80 GB weight files)"
     ./scripts/prepare.sh
   fi
 else
@@ -235,7 +235,7 @@ else IP="$HOST"; fi
 printf '\n%s  ✔ %s is now LIVE! on port %s%s\n\n' "$G" "$SERVED_NAME" "$PORT" "$R"
 cat <<EOF
     API      http://${IP:-<spark-address>}:$PORT/v1   (model: $SERVED_NAME)
-    Window   $CONTEXT tokens · $PARALLEL at once · native FP8 / MXFP4 · drafts $( [[ "$DRAFTS" == 1 ]] && echo on || echo off) · images $( [[ "$VISION" == 1 ]] && echo on || echo off)
+    Window   $CONTEXT tokens · $PARALLEL at once · $MODEL_FORMAT · drafts $( [[ "$DRAFTS" == 1 ]] && echo on || echo off) · images $( [[ "$VISION" == 1 ]] && echo on || echo off)
     Logs     docker logs -f $CONTAINER_NAME$(for i in 1 2 3; do printf '   (rank %s: ssh %s docker logs -f %s)' "$i" "$(worker_host "$i")" "$CONTAINER_NAME"; done)
     Restart  ./start.sh restart
     Stop     ./stop.sh

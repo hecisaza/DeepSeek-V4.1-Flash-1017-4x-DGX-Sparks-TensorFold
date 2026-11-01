@@ -54,19 +54,29 @@ ORDER="${ORDER:-auto}"
 # DeepSeek's own release, served as published: FP8 E4M3 linears (UE8M0 scales on 32 x 32 blocks), MXFP4 routed
 # experts, bf16 elsewhere, the Engram tables in FP8 read from disk. ~510 GB, downloaded once on this Spark; the workers
 # read it (and their weight files) from here over NFS.
-# DERISKED=1 selects Blackfrost-AI's checkpoint; explicit MODEL_ID / MODEL_REVISION still win.
+# DERISKED=1 selects Blackfrost-AI's checkpoint. NVFP4=1 selects NVIDIA's NVFP4 release of the same model (routed experts
+# NVFP4 with 4-bit activations on GB10's block-scaled MMA, Engram tables MXFP4, everything else DeepSeek's bytes; ~430 GB;
+# zig/patches/0037). Explicit MODEL_ID / MODEL_REVISION still win.
 DERISKED="${DERISKED:-0}"
 [[ "$DERISKED" =~ ^[01]$ ]] || { echo "DERISKED must be 0 or 1" >&2; exit 1; }
+NVFP4="${NVFP4:-0}"
+[[ "$NVFP4" =~ ^[01]$ ]] || { echo "NVFP4 must be 0 or 1" >&2; exit 1; }
+[[ "$NVFP4" != 1 || "$DERISKED" != 1 ]] || { echo "NVFP4=1 and DERISKED=1 name two checkpoints: set one" >&2; exit 1; }
 _default_model=deepseek-ai/DeepSeek-V4.1-Flash-1017
 [[ "$DERISKED" != 1 ]] || _default_model=Blackfrost-AI/DeepSeek-V4.1-Flash-1017-DERISKED-FP8
+[[ "$NVFP4" != 1 ]] || _default_model=nvidia/DeepSeek-V4.1-Flash-1017-NVFP4
 MODEL_ID="${MODEL_ID:-$_default_model}"
 _rev=""
 case "$MODEL_ID" in
   deepseek-ai/DeepSeek-V4.1-Flash-1017) _rev=1bae0e1088993b9b82de08f59de5be5a34e42170 ;;
   Blackfrost-AI/DeepSeek-V4.1-Flash-1017-DERISKED-FP8) _rev=4bb7df57c6bf26caf40e8da905e4062aed088ea6 ;;
+  nvidia/DeepSeek-V4.1-Flash-1017-NVFP4) _rev=480550d349ede47a048eb65a276c5c01a06256e2 ;;
 esac
 unset _default_model
 MODEL_REVISION="${MODEL_REVISION-$_rev}"
+# What the banners and first-run messages say of the checkpoint.
+if [[ "$MODEL_ID" == nvidia/DeepSeek-V4.1-Flash-1017-NVFP4 ]]; then MODEL_FORMAT="NVFP4 experts / MXFP4 Engram"; MODEL_SIZE="~430 GB"
+else MODEL_FORMAT="native FP8 / MXFP4"; MODEL_SIZE="~510 GB"; fi
 # ABLIT=1 grafts drowzeys/keys-DeepSeek-V4.1-Flash-1017-Abliterated's native-FP8 sidecar (attn.wo_b, layers 10-35,
 # the overlay's "recipe A") onto the checkpoint before the rank caches are baked. Gated, free, automatic approval
 # after accepting its terms at https://huggingface.co/drowzeys/keys-DeepSeek-V4.1-Flash-1017-Abliterated while
@@ -141,6 +151,9 @@ ENGRAM_AIO="${ENGRAM_AIO:-1}"
 # none). ENGRAM_INSTREAM=1: a round's wait for its rows runs as a host step on the GPU stream instead of holding the host
 # (needs ENGRAM_AIO=1).
 ENGRAM_PACKED="${ENGRAM_PACKED:-0}"
+# The packed shards hold FP8 rows and decode them on the GPU; NVIDIA's MXFP4 tables are read as stored.
+[[ "$MODEL_ID" != nvidia/DeepSeek-V4.1-Flash-1017-NVFP4 || "$ENGRAM_PACKED" != 1 ]] ||
+  { echo "ENGRAM_PACKED=1 reads FP8 Engram tables: NVFP4=1's are MXFP4; leave it 0" >&2; exit 1; }
 ENGRAM_OWNED="${ENGRAM_OWNED:-1}"
 ENGRAM_CACHE_MIB="${ENGRAM_CACHE_MIB:-2048}"
 ENGRAM_INSTREAM="${ENGRAM_INSTREAM:-0}"

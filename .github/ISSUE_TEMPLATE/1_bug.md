@@ -28,7 +28,7 @@ assignees: ""
 - Image: <!-- `docker images | grep tensorfold-dsv41`, or `docker inspect -f '{{index .Config.Labels "tf.ref"}}' dsv41-1017-tf` -->
 - Fabric: <!-- `./start.sh` (switch) or `./start-switchless.sh` (ring) -->
 - `start.sh` invocation: <!-- e.g. `./start-switchless.sh`, or `POOL=4194304 ./start.sh --rebuild` -->
-- Changed settings: <!-- CONTEXT, POOL, PARALLEL, DRAFTS, DERISKED, ABLIT, ENGRAM_PACKED, RDMA, any TF_DS_* flag -->
+- Changed settings: <!-- CONTEXT, POOL, PARALLEL, DRAFTS, DERISKED, NVFP4, ABLIT, ENGRAM_PACKED, RDMA, any TF_DS_* flag -->
 - Startup lines: <!-- `docker logs dsv41-1017-tf 2>&1 | grep -E "CUDA sm_|serving"` (rank 0); each worker's own `docker logs` for the others -->
 
 ---

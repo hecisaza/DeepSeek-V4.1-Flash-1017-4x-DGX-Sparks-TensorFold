@@ -9,6 +9,7 @@ WORKER3=user@192.0.2.4         # NCCL rank 3 (spark4)
 # NFS_PATH=/huggingface        # HF_CACHE's path in this Spark's NFS export (an export with fsid=0 at its root)
 # PORT=8888
 # DERISKED=1                  # use Blackfrost-AI/DeepSeek-V4.1-Flash-1017-DERISKED-FP8
+# NVFP4=1                     # use nvidia/DeepSeek-V4.1-Flash-1017-NVFP4 (~430 GB; see README: NVFP4)
 # export TF_DS_PAIR_SUM=1     # pair-sum gathers (zig/patches/0008, 0010): validate on your own ring first
 # export TF_DS_IDX_RB=2       # the indexer's kit kernel, its own RB=2 capture (zig/patches/0014): validate on
 #                             # your own ring first
