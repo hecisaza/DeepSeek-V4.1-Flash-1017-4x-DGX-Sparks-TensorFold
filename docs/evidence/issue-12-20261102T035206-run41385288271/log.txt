@@ -1,0 +1,4 @@
+03:51:25 issue https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/12 -> branch in hecisaza/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold; work dir /root/actions-runner/_work/_temp/issues/MiaAI-Lab-DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold-12
+03:51:25 live build: DeepSeek-V4.1-Flash-1017 at http://[address]:8888/v1
+03:51:27 triage agent: claude -p --permission-mode acceptEdits --allowedTools "Bash,Read,Edit,Write,Glob,Grep,WebFetch" (timeout 900s)
+03:51:53 triage: api: The reporter sees the first sampled (non-greedy) request after about an hour idle stall 70-165 s before the first token and decode at about 38 tok/s, while the next sampled request and greedy requests after the same idle are at spec. A ring data point in the thread also shows the first two sampled replies decoding about a third slower, with normal first-token time.

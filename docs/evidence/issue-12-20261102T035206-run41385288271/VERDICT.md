@@ -1,0 +1,11 @@
+**Issue outcome: TRIAGED** (label `issue:triaged`)
+
+- triage only: api: The reporter sees the first sampled (non-greedy) request after about an hour idle stall 70-165 s before the first token and decode at about 38 tok/s, while the next sampled request and greedy requests after the same idle are at spec. A ring data point in the thread also shows the first two sampled replies decoding about a third slower, with normal first-token time.
+
+Facts:
+
+- triage: api (medium confidence)
+- triage, what shows it: Against the live build as it runs, with no restart: confirm a warm sampled request is fast, then send no requests for 60 minutes or more. Send a streamed /v1/chat/completions request with temperature 0.7 (or unset), thinking off via chat_template_kwargs, max_tokens 300 and a fixed prompt. Record the time to first token and decode tok/s, then send the same request again at once. After another idle hour of 60 minutes or more, send a greedy request (temperature 0) first, then the sampled one. The bug shows if the first sampled request after idle has a time to first token of tens of seconds or decodes at about half speed while the repeat and the greedy request do not. If it does not show, record that the live build runs current main with 0034 on a ring, not the reporter's pre-0034 image on a switched mesh.
+- patches named: 0034, 0026
+
+_FIXED means the fix is verified on hardware, not merged. NEEDS THE LAB and REPRODUCED are for a person to pick up._
