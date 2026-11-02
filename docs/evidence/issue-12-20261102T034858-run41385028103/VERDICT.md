@@ -1,0 +1,11 @@
+**Issue outcome: TRIAGED** (label `issue:triaged`)
+
+- triage only: api: The first sampled (non-greedy) request after a long idle shows a 70-165 s first-token stall and decodes at about 38 tok/s instead of 68, while greedy requests after the same idle and warm sampled requests run at spec. The reporter suspects a lazily rebuilt sampling-path CUDA graph or sampled-draft verify capture that does not survive idle.
+
+Facts:
+
+- triage: api (medium confidence): The first sampled (non-greedy) request after a long idle shows a 70-165 s first-token stall and decodes at about 38 tok/s instead of 68, while greedy requests after the same idle and warm sampled requests run at spec. The reporter suspects a lazily rebuilt sampling-path CUDA graph or sampled-draft verify capture that does not survive idle.
+- triage, what shows it: Against the live build, send a warm sampled request first to confirm it is fast. Then send no requests for 60+ minutes. Send one streamed chat completion with temperature unset or 0.7, thinking off (chat_template_kwargs), 300 max_tokens, the same prompt as before. Record TTFT and decode tok/s, then send the same request again at once. After another 60+ minute idle, send a greedy request (temperature 0) first and then the sampled one. A stall shows as a sampled TTFT of tens of seconds or more and about half-rate decode on the first sampled request only, with warm and greedy requests near 0.1 s TTFT. Also note whether the very first sampled request after startup is slow (first-use cost) or only the first after idle. The reporter ran a switched mesh, ABLIT=1, on an image from before 0034. If the live ring does not reproduce it, the next step is a lab run in that configuration.
+- patches named: 0034, 0021
+
+_FIXED means the fix is verified on hardware, not merged. NEEDS THE LAB and REPRODUCED are for a person to pick up._
