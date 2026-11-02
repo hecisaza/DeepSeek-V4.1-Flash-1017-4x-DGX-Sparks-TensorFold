@@ -118,7 +118,7 @@ jobs:
       - name: Issue outcome
         id: verdict
         run: |
-          W=$(dirname "$(find agent -name outcome.json -print -quit 2>/dev/null)" 2>/dev/null); [ -n "$W" ] && [ "$W" != . ] || W=$(ls -d agent/*/ 2>/dev/null | head -1)
+          W=$(dirname "$(find agent -name outcome.json -not -path '*/public/*' -print -quit 2>/dev/null)" 2>/dev/null); [ -n "$W" ] && [ "$W" != . ] || W=$(ls -d agent/*/ 2>/dev/null | head -1)   # the work dir, not its public/ copy
           [ -n "$W" ] || { mkdir -p agent/none; W=agent/none; }
           W=${W%/}; echo "WORK=$W" >> "$GITHUB_ENV"
           [ -f "$W/outcome.json" ] || { python3 - "$W" <<'PY'
