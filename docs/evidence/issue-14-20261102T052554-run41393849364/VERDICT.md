@@ -1,0 +1,11 @@
+**Issue outcome: TRIAGED** (label `issue:triaged`)
+
+- triage only: api: In long omp agent sessions at >=300K context, 9 of 175 assistant turns came back as plain content made only of DSML closing tags (no opener), with finish_reason stop and about 1 reasoning token, so no tool call is parsed; the reporter suspects the shipped TOP_P=1.0 versus their earlier top_p 0.95.
+
+Facts:
+
+- triage: api (medium confidence)
+- triage, what shows it: Against the live build, replay agent-style conversations with `tools` offered, prior assistant tool calls and tool results in history, padded to >=300K prompt tokens, `reasoning_effort: low`, temperature 1.0, top_k 20. Run a batch of turns with top_p 1.0 (server default) and a matching batch with per-request top_p 0.95, with `return_token_ids` on. Look for replies whose content is only `</｜DSML｜ parameter>` / `</｜DSML｜ invoke>` / `</｜DSML｜ calls>` closers with no tool_calls, finish_reason stop and ~1 reasoning token; check for `tensorfold.tool_parse_warning: orphan_dsml_closers` (patch 0043); compare leak rates between the two top_p batches; and use the token ids of a leaked turn to tell whether the model sampled the closers or an opener was dropped. Expect a rate of about 5% at most, so it needs a few hundred deep turns. No restart is needed because a request's own top_p overrides the server default.
+- patches named: 0043, scripts/config.sh
+
+_FIXED means the fix is verified on hardware, not merged. NEEDS THE LAB and REPRODUCED are for a person to pick up._

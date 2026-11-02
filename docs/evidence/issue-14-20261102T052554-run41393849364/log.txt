@@ -1,0 +1,4 @@
+05:25:08 issue https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/14 -> branch in hecisaza/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold; work dir /root/actions-runner/_work/_temp/issues/MiaAI-Lab-DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold-14
+05:25:08 live build: DeepSeek-V4.1-Flash-1017 at http://[address]:8888/v1
+05:25:10 triage agent: claude -p --permission-mode acceptEdits --allowedTools "Bash,Read,Edit,Write,Glob,Grep,WebFetch" (timeout 900s)
+05:25:31 triage: api: In long omp agent sessions at >=300K context, 9 of 175 assistant turns came back as plain content made only of DSML closing tags (no opener), with finish_reason stop and about 1 reasoning token, so no tool call is parsed; the reporter suspects the shipped TOP_P=1.0 versus their earlier top_p 0.95.
