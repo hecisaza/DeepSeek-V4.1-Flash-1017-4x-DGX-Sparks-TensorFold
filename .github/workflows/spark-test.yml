@@ -18,7 +18,7 @@ on:
         required: true
         type: string
       suites:
-        description: "suites to run (default: the SUITES variable, else smoke,boundary,cutin,perf,soak)"
+        description: "suites to run (default: the SUITES variable, else smoke,boundary,cutin,perf,soak,concurrency)"
         required: false
         type: string
       reps:
@@ -78,7 +78,7 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       THIS_REPO: ${{ github.repository }}
       PR_INPUT: ${{ inputs.pr || github.event.pull_request.number }}
-      SUITES: ${{ inputs.suites || vars.SUITES || 'smoke,boundary,cutin,perf,soak' }}
+      SUITES: ${{ inputs.suites || vars.SUITES || 'smoke,boundary,cutin,perf,soak,concurrency' }}
       REPS: ${{ inputs.reps || vars.REPS || '1' }}
     steps:
       - name: Resolve the pull request
