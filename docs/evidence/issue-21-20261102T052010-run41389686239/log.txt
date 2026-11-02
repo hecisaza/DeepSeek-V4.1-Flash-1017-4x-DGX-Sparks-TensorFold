@@ -1,0 +1,4 @@
+05:17:50 issue https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/21 -> branch in hecisaza/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold; work dir /root/actions-runner/_work/_temp/issues/MiaAI-Lab-DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold-21
+05:17:50 live build: DeepSeek-V4.1-Flash-1017 at http://[address]:8888/v1
+05:17:52 triage agent: claude -p --permission-mode acceptEdits --allowedTools "Bash,Read,Edit,Write,Glob,Grep,WebFetch" (timeout 900s)
+05:18:19 triage: lab: A startup wedge on a four-Spark switchless ring: rank 2's engine "stalls mid-load (no error)" in D-state with NFS rx at 0, rank 3 exits with ConnectFailed, and after a manual restart of rank 3 completes the TCP fan "zero RDMA bytes ever flow" and rank 0 never binds the API port. This needs full cold restarts and fabric/RDMA counters, not requests to the running API.
