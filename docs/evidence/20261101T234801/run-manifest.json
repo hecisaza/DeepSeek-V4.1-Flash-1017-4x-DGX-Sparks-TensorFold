@@ -1,0 +1,17 @@
+{
+ "pr_repo": "MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold",
+ "pr": 39,
+ "pr_url": "https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/39",
+ "pr_state": "open",
+ "pr_closed_at": "",
+ "head_sha": "1bb3caca6f6b916fc980038b7a293403ca0497cd",
+ "base_sha": "476bbc77c4e1d1abe45b1cd095526a9ea0d36da4",
+ "candidate_sha": "1bb3caca6f6b916fc980038b7a293403ca0497cd",
+ "candidate_kind": "head against its merge-base 476bbc77 (the PR does not merge cleanly onto the current base)",
+ "head_ref": "patches/0045-health-quiet-access-line",
+ "base_ref": "main",
+ "switches": "lab",
+ "workflow_run": "41357774436",
+ "dispatched_by": "hecisaza",
+ "event": "workflow_dispatch"
+}
