@@ -1,10 +1,13 @@
-# spark-issue: an agent reproduces an issue against the lab's live build and, when the problem is real, fixes it on a
-# branch; scripts/issue-agent.sh of the inference-agent-kit confirms the reproduction, opens the pull request here, and
-# spark-test then tests that PR against its base (same run). When the problem does not show, the attempt is posted as a
-# comment on the issue when the issue is here, or kept as a draft in the run's artifacts when the issue is elsewhere.
-# Two ways in: the label `agent` on an issue of this repository, or "Run workflow" with an issue number here or the URL
-# of an issue anywhere (the fix is always pushed here).
-# The agent runs on the self-hosted runner with the kit's AGENTS.md contract and the task template; it holds no token.
+# spark-issue: an issue, worked without a person at the keyboard. A triage agent says how this lab can work on it;
+# an `api` issue goes to the agent proper, which reproduces it against the lab's live build and, when the problem is
+# real, fixes it on a branch; scripts/issue-agent.sh of the inference-agent-kit confirms the reproduction with the
+# agent's own script, opens the pull request here, and spark-test tests that PR against its base (same run). The run
+# ends with an issue outcome (scripts/issue-verdict.py: FIXED, FIX PROPOSED, FIX FAILS, REPRODUCED, NOT REPRODUCIBLE
+# HERE, UNCLEAR, NEEDS THE LAB, OUT OF SCOPE, TRIAGED), kept on an append-only evidence branch here, posted as a comment
+# with a label when the issue is here, and written to the run summary when the issue is elsewhere (nothing is posted
+# on another repository). Three ways in: the label `agent` on an issue of this repository, "Run workflow" with an issue
+# number here or the URL of an issue anywhere (mode `triage` only classifies: a cheap sweep), or scripts/issue-sweep.sh.
+# The agent runs on the self-hosted runner with the kit's AGENTS.md contract and the task templates; it holds no token.
 # Jobs are serialized by the runner itself (one job at a time), not by a concurrency group.
 name: spark-issue
 
@@ -17,6 +20,12 @@ on:
         description: "issue number in this repository, or the URL of an issue anywhere"
         required: true
         type: string
+      mode:
+        description: "full: triage, reproduce, fix, test; triage: classify only (no lab time)"
+        required: false
+        type: choice
+        options: [full, triage]
+        default: full
 
 permissions:
   contents: write
@@ -31,37 +40,46 @@ jobs:
     timeout-minutes: 240
     outputs:
       pr: ${{ steps.agent.outputs.pr }}
+      result: ${{ steps.agent.outputs.result }}
+      work: ${{ steps.agent.outputs.work }}
     env:
       KIT: /root/inference-agent-kit
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       LIVE_API: http://192.168.1.123:8888/v1
       LIVE_MODEL: DeepSeek-V4.1-Flash-1017
       ISSUE: ${{ inputs.issue || github.event.issue.number }}
+      MODE: ${{ inputs.mode || 'full' }}
     steps:
       - name: Upstream state (stage 0)
         run: |
           "$KIT/scripts/sync.sh" "${{ github.repository }}" | tee sync.txt
 
-      - name: The agent reproduces the issue and fixes it when it is real; the script confirms and opens the PR
+      - name: Triage, then (mode full) the agent reproduces the issue and fixes it when it is real; the script confirms and opens the PR
         id: agent
         run: |
           set +e
-          "$KIT/scripts/issue-agent.sh" "$ISSUE" --repo "${{ github.repository }}" --work "$RUNNER_TEMP/issues" 2>&1 | tee agent-run.txt
+          rm -rf "$RUNNER_TEMP/issues"
+          opts=(--no-post); [ "$MODE" = triage ] && opts+=(--triage-only)
+          "$KIT/scripts/issue-agent.sh" "$ISSUE" --repo "${{ github.repository }}" --work "$RUNNER_TEMP/issues" "${opts[@]}" 2>&1 | tee agent-run.txt
           rc=${PIPESTATUS[0]}
           R=$(grep -o 'RESULT: .*' agent-run.txt | tail -1)
           echo "${R:-RESULT: no result line (exit $rc)}" >> "$GITHUB_STEP_SUMMARY"
           case "$R" in "RESULT: pr "*) echo "pr=${R#RESULT: pr }" >> "$GITHUB_OUTPUT";; esac
+          echo "result=$(sed -n 's/^RESULT: \([a-z-]*\).*/\1/p' <<<"$R")" >> "$GITHUB_OUTPUT"
+          echo "work=$(ls -d "$RUNNER_TEMP"/issues/*/ 2>/dev/null | head -1)" >> "$GITHUB_OUTPUT"
           exit "$rc"
 
-      - name: Keep the agent's notes (issue, task, REPRO.md, PR.md, logs)
+      - name: Keep the agent's notes (issue, tasks, triage, REPRO.md, PR.md, outcome, logs)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: issue-agent-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/issues/**/*.md
+            ${{ runner.temp }}/issues/**/*.json
             ${{ runner.temp }}/issues/**/*.log
             ${{ runner.temp }}/issues/**/*.txt
+            !${{ runner.temp }}/issues/**/repo/**
           if-no-files-found: ignore
 
   test:
@@ -72,3 +90,94 @@ jobs:
       pr: ${{ needs.agent.outputs.pr }}
       called: true
     secrets: inherit
+
+  outcome:
+    # the issue outcome, from the agent's files and (when a PR was opened) the PR's test verdict; evidence branch, comment, label
+    needs: [agent, test]
+    if: always() && needs.agent.result != 'skipped' && needs.agent.result != 'cancelled'
+    runs-on: [self-hosted, spark-lab]
+    timeout-minutes: 30
+    env:
+      KIT: /root/inference-agent-kit
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      THIS_REPO: ${{ github.repository }}
+      TEST_CLASS: ${{ needs.test.outputs.verdict }}
+    steps:
+      - name: The agent's files
+        uses: actions/download-artifact@v4
+        with:
+          name: issue-agent-${{ github.run_id }}
+          path: agent
+      - name: The PR's test run (when there was one)
+        if: needs.agent.outputs.pr != ''
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: spark-test-${{ github.run_id }}
+          path: test
+      - name: Issue outcome
+        id: verdict
+        run: |
+          W=$(dirname "$(find agent -name outcome.json -print -quit 2>/dev/null)" 2>/dev/null); [ -n "$W" ] && [ "$W" != . ] || W=$(ls -d agent/*/ 2>/dev/null | head -1)
+          [ -n "$W" ] || { mkdir -p agent/none; W=agent/none; }
+          W=${W%/}; echo "WORK=$W" >> "$GITHUB_ENV"
+          [ -f "$W/outcome.json" ] || { python3 - "$W" <<'PY'
+          import json, sys, os
+          # the agent produced nothing usable (no outcome.json): record that as the outcome
+          w = sys.argv[1]; url = os.environ.get("ISSUE_URL", "")
+          json.dump({"issue_url": url, "result": "failed", "detail": "the run ended before the agent produced an outcome", "triage": None}, open(os.path.join(w, "outcome.json"), "w"))
+          PY
+          }
+          TV=$(ls -t test/runs/*/verdict.json 2>/dev/null | head -1)
+          python3 "$KIT/scripts/issue-verdict.py" "$W" ${TV:+--test-verdict "$TV"} ${TEST_CLASS:+--test-class "$TEST_CLASS"} --out "$W" | tee -a "$GITHUB_STEP_SUMMARY"
+          python3 - "$W/outcome.json" "$W/verdict.json" >> "$GITHUB_OUTPUT" <<'PY'
+          import json, sys
+          o = json.load(open(sys.argv[1])); v = json.load(open(sys.argv[2]))
+          print("issue_url=" + str(o.get("issue_url", ""))); print("issue_repo=" + str(o.get("issue_repo", ""))); print("n=" + str(o.get("n", "")))
+          print("class=" + v["class"]); print("label=" + v["label"]); print("pr=" + str(o.get("pr_url") or ""))
+          PY
+        env:
+          ISSUE_URL: ${{ inputs.issue || github.event.issue.html_url }}
+
+      - name: Evidence to an append-only branch here (evidence/<owner>-<repo>-issue-<n>)
+        run: |
+          [ -n "${{ steps.verdict.outputs.n }}" ] || { echo "no issue number; nothing to file"; exit 0; }
+          SLUG=$(tr / - <<<"${{ steps.verdict.outputs.issue_repo }}"); N=${{ steps.verdict.outputs.n }}; EB="evidence/$SLUG-issue-$N"
+          RUN="issue-$N-$(date -u +%Y%m%dT%H%M%S)-run${{ github.run_id }}"
+          rm -rf evbr && git init -q evbr && (cd evbr && git config user.name "github-actions[bot]" && git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            if git fetch -q "https://x-access-token:$GH_TOKEN@github.com/$THIS_REPO.git" "refs/heads/$EB" 2>/dev/null; then git checkout -q FETCH_HEAD; else git checkout -q --orphan evidence; fi)
+          mkdir -p "evbr/docs/evidence/$RUN"
+          for f in VERDICT.md verdict.json; do cp "$WORK/$f" "evbr/docs/evidence/$RUN/" 2>/dev/null || true; done
+          for f in outcome.json triage.json REPRO.md COMMENT.md PR.md live-repro.log log.txt; do cp "$WORK/public/$f" "evbr/docs/evidence/$RUN/" 2>/dev/null || true; done   # redacted copies only
+          TV=$(ls -t test/runs/*/verdict.json 2>/dev/null | head -1); [ -n "$TV" ] && cp "$TV" "evbr/docs/evidence/$RUN/pr-test-verdict.json" || true
+          (cd evbr && git add -A && git commit -q -m "evidence: $RUN — ${{ steps.verdict.outputs.issue_url }}: ${{ steps.verdict.outputs.class }}" && git push -q "https://x-access-token:$GH_TOKEN@github.com/$THIS_REPO.git" "HEAD:refs/heads/$EB")
+          echo "EVIDENCE_URL=https://github.com/$THIS_REPO/tree/$EB/docs/evidence/$RUN" >> "$GITHUB_ENV"
+          echo "evidence: https://github.com/$THIS_REPO/tree/$EB/docs/evidence/$RUN"
+
+      - name: Comment and label the issue (here), or write the comment to the run summary (an issue elsewhere)
+        run: |
+          {
+            cat "$WORK/VERDICT.md"; echo
+            [ -n "${{ steps.verdict.outputs.pr }}" ] && { echo "Fix: ${{ steps.verdict.outputs.pr }} (tested by spark-test in this run: ${TEST_CLASS:-no verdict})"; echo; }
+            [ -s "$WORK/public/COMMENT.md" ] && { cat "$WORK/public/COMMENT.md"; echo; }
+            echo "_Evidence: ${EVIDENCE_URL:-none} (run [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})). Posted by the spark-issue workflow._"
+          } > comment.md
+          if [ "${{ steps.verdict.outputs.issue_repo }}" = "$THIS_REPO" ]; then
+            gh issue comment "${{ steps.verdict.outputs.n }}" -R "$THIS_REPO" --body-file comment.md
+            for l in fixed fix-proposed fix-fails reproduced not-reproducible unclear needs-lab out-of-scope triaged; do gh issue edit "${{ steps.verdict.outputs.n }}" -R "$THIS_REPO" --remove-label "issue:$l" >/dev/null 2>&1 || true; done
+            gh label create "${{ steps.verdict.outputs.label }}" -R "$THIS_REPO" --color 5319e7 --description "issue outcome from the spark-issue workflow" >/dev/null 2>&1 || true
+            gh issue edit "${{ steps.verdict.outputs.n }}" -R "$THIS_REPO" --add-label "${{ steps.verdict.outputs.label }}" >/dev/null 2>&1 || true
+          else
+            { echo "The issue is in ${{ steps.verdict.outputs.issue_repo }}: nothing was posted there. The comment, ready to paste:"; echo; cat comment.md; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Keep the outcome as a run artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue-outcome-${{ github.run_id }}
+          path: |
+            comment.md
+            agent/*/VERDICT.md
+            agent/*/verdict.json
+            agent/*/public/**
+          if-no-files-found: ignore

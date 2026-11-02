@@ -47,6 +47,12 @@ on:
         required: false
         type: boolean
         default: true
+    outputs:
+      verdict:
+        description: "the merge-readiness class of the run (READY, SAFE, UNVERIFIED, NOT READY, RERUN)"
+        value: ${{ jobs.test.outputs.verdict }}
+      pr_url:
+        value: ${{ jobs.test.outputs.pr_url }}
 
 permissions:
   contents: write        # evidence commits, claims/
