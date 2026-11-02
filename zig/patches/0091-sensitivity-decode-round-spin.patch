@@ -1,0 +1,20 @@
+Subject: SENSITIVITY CHECK, do not merge: about a millisecond of busy work on every decode round
+
+diff --git a/zig/src/core/lanes/engine.zig b/zig/src/core/lanes/engine.zig
+index 346e6cc0..361bf8f3 100644
+--- a/zig/src/core/lanes/engine.zig
++++ b/zig/src/core/lanes/engine.zig
+@@ -171,6 +171,13 @@ pub const Engine = struct {
+         const a = e.arena.allocator();
+         try trail.event(e, &.{ f("ev", str("step")), f("index", int(e.steps)) });
+         e.steps += 1;
++        // SENSITIVITY CHECK (do not merge): about a millisecond of busy work on every decode round
++        {
++            var spin: u64 = @intCast(e.steps);
++            const vp: *volatile u64 = &spin;
++            var i: u64 = 0;
++            while (i < 400_000) : (i += 1) vp.* = vp.* *% 6364136223846793005 +% i;
++        }
+         var live: std.ArrayList(*Stream) = .empty;
+         for (e.live.items) |s| {
+             if (!s.finished and !s.paused) try live.append(a, s);
