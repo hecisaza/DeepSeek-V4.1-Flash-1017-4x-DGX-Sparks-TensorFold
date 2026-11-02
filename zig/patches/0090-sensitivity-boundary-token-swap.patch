@@ -1,0 +1,16 @@
+Subject: SENSITIVITY CHECK, do not merge: a prompt past one chunk gets its second chunk's first token replaced
+
+diff --git a/zig/src/families/dsv41/lanes.zig b/zig/src/families/dsv41/lanes.zig
+index 3bdb159c..9165bcdc 100644
+--- a/zig/src/families/dsv41/lanes.zig
++++ b/zig/src/families/dsv41/lanes.zig
+@@ -636,6 +636,9 @@ pub const Lanes = struct {
+         const seq = &self.seqs[slot];
+         try seq.resize(gpa, len);
+         for (seq.items, ids) |*q, id| q.* = @intCast(id);
++        // SENSITIVITY CHECK (do not merge): a prompt longer than one chunk has the first token of its second chunk
++        // replaced by the token before it, so only replies to prompts past the first chunk end can change
++        if (len > model.chunk_rows) seq.items[model.chunk_rows] = seq.items[model.chunk_rows - 1];
+         // images: each span's positions dead in the sequence (negative: no Engram n-gram reaches into or across one),
+         // its rows ready (a gate's) or the tower's (rank 0), all of them sent to rank 1 after the fill's start
+         var spans: std.ArrayList(@import("prompt.zig").Span) = .empty;
