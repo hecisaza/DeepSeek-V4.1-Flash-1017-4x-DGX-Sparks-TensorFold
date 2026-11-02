@@ -1,0 +1,27 @@
+{
+ "issue_url": "https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/34",
+ "issue_repo": "MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold",
+ "n": 34,
+ "repo": "hecisaza/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold",
+ "branch": "agent/issue-34",
+ "live_model": "DeepSeek-V4.1-Flash-1017",
+ "triage": {
+  "kind": "feature",
+  "why": "The issue is titled \"Idea\" and asks a design question before any code: an opt-in SLIM_CHECKPOINT=1 that drops the ~284 GiB of checkpoint shards only prepare.sh reads once the four weight files exist. Nothing has been built or start-tested, and the maintainer left it open as a feature request.",
+  "repro": "",
+  "patches": [
+   "scripts/prepare.sh",
+   "scripts/config.sh",
+   "verify_kit.sh",
+   "zig/src/families/dsv41/engram_io.zig"
+  ],
+  "confidence": "high"
+ },
+ "agent_verdict": null,
+ "live_repro_exit": null,
+ "fix_commits": 0,
+ "pr_url": null,
+ "result": "out-of-scope",
+ "detail": "(draft comment at /root/actions-runner/_work/_temp/issues/MiaAI-Lab-DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold-34/COMMENT.md; the issue is in MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold, nothing was posted there)",
+ "when": "2026-11-02T05:24:57+00:00"
+}

@@ -1,0 +1,4 @@
+05:24:37 issue https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/34 -> branch in hecisaza/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold; work dir /root/actions-runner/_work/_temp/issues/MiaAI-Lab-DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold-34
+05:24:37 live build: DeepSeek-V4.1-Flash-1017 at http://[address]:8888/v1
+05:24:38 triage agent: claude -p --permission-mode acceptEdits --allowedTools "Bash,Read,Edit,Write,Glob,Grep,WebFetch" (timeout 900s)
+05:24:57 triage: feature: The issue is titled "Idea" and asks a design question before any code: an opt-in SLIM_CHECKPOINT=1 that drops the ~284 GiB of checkpoint shards only prepare.sh reads once the four weight files exist. Nothing has been built or start-tested, and the maintainer left it open as a feature request.
