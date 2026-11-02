@@ -1,0 +1,28 @@
+{
+ "issue_url": "https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/16",
+ "issue_repo": "MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold",
+ "n": 16,
+ "repo": "hecisaza/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold",
+ "branch": "agent/issue-16",
+ "live_model": "DeepSeek-V4.1-Flash-1017",
+ "triage": {
+  "kind": "feature",
+  "why": "The reporter asks to \"Add (or document a path to) 8-rank / TP8 support\", a 2x4 or 4x2 grid analogue of the current 2x2, for an 8 x DGX Spark fleet; the maintainer replied that it is engine work with no TP8 branch and kept it open as a feature request. No defect in the four-Spark recipe is reported.",
+  "repro": "",
+  "patches": [
+   "0015-wp4-quarter-hc.patch",
+   "0007",
+   "scripts/nodes.sh",
+   "scripts/config.sh",
+   "start.sh"
+  ],
+  "confidence": "high"
+ },
+ "agent_verdict": null,
+ "live_repro_exit": null,
+ "fix_commits": 0,
+ "pr_url": null,
+ "result": "out-of-scope",
+ "detail": "(draft comment at /root/actions-runner/_work/_temp/issues/MiaAI-Lab-DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold-16/COMMENT.md; the issue is in MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold, nothing was posted there)",
+ "when": "2026-11-02T05:18:46+00:00"
+}
