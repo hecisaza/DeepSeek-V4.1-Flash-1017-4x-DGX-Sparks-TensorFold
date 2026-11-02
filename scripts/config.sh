@@ -143,6 +143,9 @@ GRAPHS="${GRAPHS:-1}"
 SIDE="${SIDE:-1}"
 PREFETCH="${PREFETCH:-1}"
 ENGRAM_AIO="${ENGRAM_AIO:-1}"
+# Other requests get a round between a long prompt's prefill chunks (patches 0023, 0031, 0032). On by default: a short
+# request behind a cold 64K-token prompt answered in 0.35 s instead of 17 s on a four-Spark ring, with identical replies.
+: "${TF_DS_PREFILL_YIELD:=1}"; export TF_DS_PREFILL_YIELD
 # Engram's rows from packed shards (zig/patches/0003, off by default): each Spark keeps the tables' rows as records (a
 # row's FP8 values and its scales side by side, so a row is one read instead of two), written once by
 # tf-dsv41-engram-pack, with a row cache in memory and the FP8 decode on the GPU; the rows a layer reads are the same

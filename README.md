@@ -118,7 +118,7 @@ numbers are this fabric's, not a switch's ([more on the difference](#how-it-is-s
 
 Three opt-in switches (off by default) add more, with the same replies: `TF_DS_EXPERT_EXIT=1` and `TF_DS_SAMPLE_CAND=1` together give level at one request,
 +1.6 % to +2.8 % at 4 and +1.9 % to +8.2 % at 8 (measured with `TF_DS_PREFILL_YIELD=1` on as well, which costs nothing
-here). `TF_DS_PREFILL_YIELD=1` (off by default) keeps the other requests going while a long prompt is read: with 15
+here). `TF_DS_PREFILL_YIELD=1` (on by default; `TF_DS_PREFILL_YIELD=0` turns it off) keeps the other requests going while a long prompt is read: with 15
 requests decoding, a 25,000-token prompt stalled them ~7.5 s, ~1 s with it, for +35-41 % on that prompt's own time to
 first token. With it, `0031` also admits new requests between a long prompt's chunks: a short request arriving 1 s into a
 cold 50,939-token prompt had its first token in 0.31 s, the long one in 13.5 s ([below](#cached-image-and-late-request-latency)).
