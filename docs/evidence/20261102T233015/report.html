@@ -1,0 +1,218 @@
+<title>Aggregate: tokens per second over concurrent streams</title>
+<style>:root{--bg:#F1F4F6;--ink:#16202A;--muted:#5B6B7A;--line:#D6DDE3;--code:#E8EDF1;--accent:#0F766E}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#0F1519;--ink:#E6EBEF;--muted:#94A3B0;--line:#2A3540;--code:#121A21;--accent:#2DD4BF}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#0F1519;--ink:#E6EBEF;--muted:#94A3B0;--line:#2A3540;--code:#121A21;--accent:#2DD4BF}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 ui-sans-serif,system-ui,sans-serif;padding:0 20px;padding-block:28px 48px;max-width:1000px;margin:0 auto}
+h1{font-size:26px;margin:0 0 6px} h2{font-size:18px;margin:28px 0 8px} p{margin:6px 0} li{margin:3px 0}
+code{font-family:ui-monospace,Menlo,monospace;font-size:12.5px;background:var(--code);padding:1px 5px;border-radius:4px}
+table{border-collapse:collapse;width:100%;font-size:13.5px;margin:8px 0} td,th{padding:5px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top} th{color:var(--muted);font-weight:600}
+svg{max-width:100%;height:auto;border:1px solid var(--line);margin:8px 0} details{color:var(--muted);font-size:13px} strong{color:var(--accent)}</style>
+<div><h1>Evidence: pr vs base</h1>
+<table>
+<tr><th>target</th><th>role</th><th>image / artifact</th><th>model</th><th>settings that differ from the control</th></tr>
+<tr><td><code>pr</code></td><td>candidate</td><td><code>tensorfold-dsv41:pr-de28880a</code> (54b3ce1ffed2)</td><td><code>DeepSeek-V4.1-Flash-1017</code></td><td>-</td></tr>
+<tr><td><code>base</code></td><td>control</td><td><code>tensorfold-dsv41:base-97fdffb9</code> (5a94966d9621)</td><td><code>DeepSeek-V4.1-Flash-1017</code></td><td>baseline</td></tr>
+</table>
+<p>Conditions: fabric ring; order: A then B, one repetition (no reverse order: pass --opt reps=2 for a counterbalanced run); repetitions: 1; kit 1c26155.</p>
+<p>Restore: live restored (verified: API answers, running artifact is live&#x27;s).</p>
+<h2>smoke</h2>
+<table>
+<tr><th>target</th><th>rep</th><th>arithmetic</th><th>greedy repeat equal</th><th>stream matches</th><th>JSON mode</th><th>first token (stream)</th><th>errors</th></tr>
+<tr><td><code>pr</code></td><td>0</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>0.098 s</td><td>-</td></tr>
+<tr><td><code>base</code></td><td>0</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>0.089 s</td><td>-</td></tr>
+</table>
+<details><summary>machine state after the suite</summary>
+<li><code>pr</code> rep 0: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2184 MHz, 55, [N/A], [N/A], 84 %&quot;], &quot;load&quot;: &quot;load average: 6.87, 2.89, 1.20&quot;, &quot;container&quot;: &quot;92 pids 3.018GiB / 121.7GiB&quot;, &quot;mem_available_mb&quot;: &quot;26430&quot;}}</code></li>
+<li><code>base</code> rep 0: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2177 MHz, 59, [N/A], [N/A], 16 %&quot;], &quot;load&quot;: &quot;load average: 7.12, 5.87, 4.60&quot;, &quot;container&quot;: &quot;92 pids 3.004GiB / 121.7GiB&quot;, &quot;mem_available_mb&quot;: &quot;27053&quot;}}</code></li>
+</details>
+<h2>boundary</h2>
+<p><strong>6 of 19</strong> greedy reply hashes identical, <code>pr</code> against <code>base</code>, over 1 repetition(s).</p>
+<table>
+<tr><th>rep</th><th>prompt</th><th>tokens (pr / base)</th><th><code>pr</code></th><th><code>base</code></th><th>same</th></tr>
+<tr><td>0</td><td>len5</td><td>5 / 5</td><td><code>38127fef0fbb</code></td><td><code>38127fef0fbb</code></td><td>✓</td></tr>
+<tr><td>0</td><td>len2047</td><td>2047 / 2047</td><td><code>8488ccfbcf35</code></td><td><code>8488ccfbcf35</code></td><td>✓</td></tr>
+<tr><td>0</td><td>len2048</td><td>2048 / 2048</td><td><code>c5ac2fb76516</code></td><td><code>c5ac2fb76516</code></td><td>✓</td></tr>
+<tr><td>0</td><td>len2049</td><td>2049 / 2049</td><td><code>e3b0c44298fc</code></td><td><code>6766401c9caa</code></td><td><strong>✗</strong></td></tr>
+<tr><td>0</td><td>len4095</td><td>4095 / 4095</td><td><code>ed9e5086f520</code></td><td><code>ed9e5086f520</code></td><td>✓</td></tr>
+<tr><td>0</td><td>len4096</td><td>4096 / 4096</td><td><code>a87bd18cc9ce</code></td><td><code>52584e31f990</code></td><td><strong>✗</strong></td></tr>
+<tr><td>0</td><td>len4097</td><td>4097 / 4097</td><td><code>1f4e19e30220</code></td><td><code>1a71db317ee7</code></td><td><strong>✗</strong></td></tr>
+<tr><td>0</td><td>len6143</td><td>6143 / 6143</td><td><code>3b8fc1ca6a7b</code></td><td><code>2f9626e9baf5</code></td><td><strong>✗</strong></td></tr>
+<tr><td>0</td><td>len6144</td><td>6144 / 6144</td><td><code>2ef3dc011922</code></td><td><code>11933f2d4bd7</code></td><td><strong>✗</strong></td></tr>
+<tr><td>0</td><td>len6145</td><td>6145 / 6145</td><td><code>f9e1ef40f7de</code></td><td><code>7aa2f63b2547</code></td><td><strong>✗</strong></td></tr>
+<tr><td>0</td><td>len8193</td><td>8193 / 8193</td><td><code>2d1b0132f716</code></td><td><code>2ef3dc011922</code></td><td><strong>✗</strong></td></tr>
+<tr><td>0</td><td>len12289</td><td>12289 / 12289</td><td><code>2ef3dc011922</code></td><td><code>4fcfbd64881f</code></td><td><strong>✗</strong></td></tr>
+<tr><td>0</td><td>pfx_base</td><td>5124 / 5124</td><td><code>bd6f047c4da0</code></td><td><code>52afe4842e5d</code></td><td><strong>✗</strong></td></tr>
+<tr><td>0</td><td>pfx_div3072</td><td>3376 / 3376</td><td><code>64d23fe171dc</code></td><td><code>64d23fe171dc</code></td><td>✓</td></tr>
+<tr><td>0</td><td>pfx_div2044</td><td>2348 / 2348</td><td><code>136234f08500</code></td><td><code>16db99ba02f2</code></td><td><strong>✗</strong></td></tr>
+<tr><td>0</td><td>pfx_div4092</td><td>4396 / 4396</td><td><code>63798c5ba36c</code></td><td><code>63798c5ba36c</code></td><td>✓</td></tr>
+<tr><td>0</td><td>pfx_div4093</td><td>4397 / 4397</td><td><code>67e4644b5144</code></td><td><code>6b1cfc31884d</code></td><td><strong>✗</strong></td></tr>
+<tr><td>0</td><td>pfx_base_again</td><td>5124 / 5124</td><td><code>bd6f047c4da0</code></td><td><code>52afe4842e5d</code></td><td><strong>✗</strong></td></tr>
+<tr><td>0</td><td>pfx_extend</td><td>6660 / 6660</td><td><code>3472b46bdbb4</code></td><td><code>357a869fef18</code></td><td><strong>✗</strong></td></tr>
+</table>
+<details><summary>machine state after the suite</summary>
+<li><code>pr</code> rep 0: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2177 MHz, 62, [N/A], [N/A], 0 %&quot;], &quot;load&quot;: &quot;load average: 6.64, 3.27, 1.39&quot;, &quot;container&quot;: &quot;92 pids 3.161GiB / 121.7GiB&quot;, &quot;mem_available_mb&quot;: &quot;26808&quot;}}</code></li>
+<li><code>base</code> rep 0: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2177 MHz, 65, [N/A], [N/A], 0 %&quot;], &quot;load&quot;: &quot;load average: 5.68, 5.65, 4.58&quot;, &quot;container&quot;: &quot;92 pids 3.147GiB / 121.7GiB&quot;, &quot;mem_available_mb&quot;: &quot;26765&quot;}}</code></li>
+</details>
+<h2>cutin</h2>
+<p><code>pr</code> rep 0: short question first token <strong>0.45 s</strong> (rounds 0.34–0.469), long prompt first token 20.17 s (rounds 19.957–20.271); 3 rounds; admitted during the long prefill in 3 of 3 rounds</p>
+<p><code>base</code> rep 0: short question first token <strong>0.42 s</strong> (rounds 0.349–0.444), long prompt first token 20.34 s (rounds 20.05–20.346); 3 rounds; admitted during the long prefill in 3 of 3 rounds</p>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 150" width="640" height="150" font-family="ui-sans-serif,system-ui" font-size="12">
+<rect width="640" height="150" fill="#ffffff"/>
+<text x="12" y="24" font-weight="600" fill="#16202A">Cut-in: seconds to first token, a short question 3 s behind a cold long prompt</text>
+<text x="12" y="49" fill="#5B6B7A">pr rep 0 · short question</text>
+<rect x="230" y="38" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="38" width="7.3" height="14" fill="#0F766E"/>
+<text x="628" y="49" text-anchor="end" fill="#16202A">0.45 s</text>
+<text x="12" y="75" fill="#5B6B7A">pr rep 0 · long prompt</text>
+<rect x="230" y="64" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="64" width="325.3" height="14" fill="#8FB3AE"/>
+<text x="628" y="75" text-anchor="end" fill="#16202A">20.17 s</text>
+<text x="12" y="101" fill="#5B6B7A">base rep 0 · short question</text>
+<rect x="230" y="90" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="90" width="6.8" height="14" fill="#8FB3AE"/>
+<text x="628" y="101" text-anchor="end" fill="#16202A">0.42 s</text>
+<text x="12" y="127" fill="#5B6B7A">base rep 0 · long prompt</text>
+<rect x="230" y="116" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="116" width="328.0" height="14" fill="#8FB3AE"/>
+<text x="628" y="127" text-anchor="end" fill="#16202A">20.34 s</text>
+</svg>
+<details><summary>machine state after the suite</summary>
+<li><code>pr</code> rep 0: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2184 MHz, 70, [N/A], [N/A], 95 %&quot;], &quot;load&quot;: &quot;load average: 6.56, 3.90, 1.73&quot;, &quot;container&quot;: &quot;92 pids 3.189GiB / 121.7GiB&quot;, &quot;mem_available_mb&quot;: &quot;26707&quot;}}</code></li>
+<li><code>base</code> rep 0: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2177 MHz, 69, [N/A], [N/A], 96 %&quot;], &quot;load&quot;: &quot;load average: 7.33, 6.14, 4.82&quot;, &quot;container&quot;: &quot;92 pids 3.2GiB / 121.7GiB&quot;, &quot;mem_available_mb&quot;: &quot;26702&quot;}}</code></li>
+</details>
+<h2>perf</h2>
+<table>
+<tr><th>target</th><th>rep</th><th>decode tok/s, one stream</th><th>prefill tok/s, cold long prompt</th><th>aggregate tok/s, concurrent streams</th><th>errors</th></tr>
+<tr><td><code>pr</code></td><td>0</td><td><strong>59.0</strong> (56.7–59.5)</td><td><strong>3188.3</strong> (3063.8–3189.2; 12004 tokens)</td><td><strong>134.2</strong> (126.9–137.3; 4 streams)</td><td>-</td></tr>
+<tr><td><code>base</code></td><td>0</td><td><strong>59.0</strong> (52.8–60.1)</td><td><strong>3183.2</strong> (3030.5–3200.2; 12004 tokens)</td><td><strong>132.4</strong> (124.9–136.5; 4 streams)</td><td>-</td></tr>
+</table>
+<p><code>pr</code> against <code>base</code>: decode +0.0%, prefill +0.2%, aggregate +1.4% (medians over repetitions; the verdict counts a difference only beyond the rounds&#x27; spread, at least ±3 %).</p>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 98" width="640" height="98" font-family="ui-sans-serif,system-ui" font-size="12">
+<rect width="640" height="98" fill="#ffffff"/>
+<text x="12" y="24" font-weight="600" fill="#16202A">Decode: tokens per second, one stream</text>
+<text x="12" y="49" fill="#5B6B7A">pr rep 0</text>
+<rect x="230" y="38" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="38" width="328.0" height="14" fill="#0F766E"/>
+<text x="628" y="49" text-anchor="end" fill="#16202A">59.0 tok/s</text>
+<text x="12" y="75" fill="#5B6B7A">base rep 0</text>
+<rect x="230" y="64" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="64" width="328.0" height="14" fill="#8FB3AE"/>
+<text x="628" y="75" text-anchor="end" fill="#16202A">59.0 tok/s</text>
+</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 98" width="640" height="98" font-family="ui-sans-serif,system-ui" font-size="12">
+<rect width="640" height="98" fill="#ffffff"/>
+<text x="12" y="24" font-weight="600" fill="#16202A">Prefill: prompt tokens per second, cold long prompt</text>
+<text x="12" y="49" fill="#5B6B7A">pr rep 0</text>
+<rect x="230" y="38" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="38" width="328.0" height="14" fill="#0F766E"/>
+<text x="628" y="49" text-anchor="end" fill="#16202A">3188.3 tok/s</text>
+<text x="12" y="75" fill="#5B6B7A">base rep 0</text>
+<rect x="230" y="64" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="64" width="327.5" height="14" fill="#8FB3AE"/>
+<text x="628" y="75" text-anchor="end" fill="#16202A">3183.2 tok/s</text>
+</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 98" width="640" height="98" font-family="ui-sans-serif,system-ui" font-size="12">
+<rect width="640" height="98" fill="#ffffff"/>
+<text x="12" y="24" font-weight="600" fill="#16202A">Aggregate: tokens per second over concurrent streams</text>
+<text x="12" y="49" fill="#5B6B7A">pr rep 0</text>
+<rect x="230" y="38" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="38" width="328.0" height="14" fill="#0F766E"/>
+<text x="628" y="49" text-anchor="end" fill="#16202A">134.2 tok/s</text>
+<text x="12" y="75" fill="#5B6B7A">base rep 0</text>
+<rect x="230" y="64" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="64" width="323.6" height="14" fill="#8FB3AE"/>
+<text x="628" y="75" text-anchor="end" fill="#16202A">132.4 tok/s</text>
+</svg>
+<details><summary>machine state after the suite</summary>
+<li><code>pr</code> rep 0: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2177 MHz, 65, [N/A], [N/A], 0 %&quot;], &quot;load&quot;: &quot;load average: 5.94, 4.04, 1.86&quot;, &quot;container&quot;: &quot;92 pids 3.362GiB / 121.7GiB&quot;, &quot;mem_available_mb&quot;: &quot;26427&quot;}}</code></li>
+<li><code>base</code> rep 0: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2177 MHz, 66, [N/A], [N/A], 0 %&quot;], &quot;load&quot;: &quot;load average: 6.16, 5.97, 4.81&quot;, &quot;container&quot;: &quot;92 pids 3.346GiB / 121.7GiB&quot;, &quot;mem_available_mb&quot;: &quot;26420&quot;}}</code></li>
+</details>
+<h2>startup</h2>
+<p><code>pr</code>: 100.6 s from the switch to the API answering (1 start(s))</p>
+<p><code>base</code>: 101.8 s from the switch to the API answering (1 start(s))</p>
+<h2>soak</h2>
+<p><code>pr</code> rep 0: 165 completions, 121 client aborts, <strong>0 errors</strong>, 58 canary checks with <strong>0 mismatches</strong></p>
+<p>  machine samples, first and last: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2177 MHz, 67, [N/A], [N/A], 0 %&quot;], &quot;load&quot;: &quot;load average: 5.47, 3.97, 1.85&quot;, &quot;container&quot;: &quot;96 pids 3.381GiB / 121.7GiB&quot;, &quot;me</code> → <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2177 MHz, 71, [N/A], [N/A], 96 %&quot;], &quot;load&quot;: &quot;load average: 6.26, 6.28, 4.11&quot;, &quot;container&quot;: &quot;95 pids 3.815GiB / 121.7GiB&quot;, &quot;m</code></p>
+<p><code>base</code> rep 0: 161 completions, 123 client aborts, <strong>0 errors</strong>, 57 canary checks with <strong>0 mismatches</strong></p>
+<p>  machine samples, first and last: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2177 MHz, 65, [N/A], [N/A], 0 %&quot;], &quot;load&quot;: &quot;load average: 5.74, 5.89, 4.79&quot;, &quot;container&quot;: &quot;96 pids 3.363GiB / 121.7GiB&quot;, &quot;me</code> → <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2177 MHz, 73, [N/A], [N/A], 83 %&quot;], &quot;load&quot;: &quot;load average: 6.52, 6.71, 5.75&quot;, &quot;container&quot;: &quot;96 pids 3.82GiB / 121.7GiB&quot;, &quot;me</code></p>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 254" width="640" height="254" font-family="ui-sans-serif,system-ui" font-size="12">
+<rect width="640" height="254" fill="#ffffff"/>
+<text x="12" y="24" font-weight="600" fill="#16202A">Soak: request outcomes</text>
+<text x="12" y="49" fill="#5B6B7A">pr rep 0 · completions</text>
+<rect x="230" y="38" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="38" width="328.0" height="14" fill="#0F766E"/>
+<text x="628" y="49" text-anchor="end" fill="#16202A">165 </text>
+<text x="12" y="75" fill="#5B6B7A">pr rep 0 · aborts</text>
+<rect x="230" y="64" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="64" width="240.5" height="14" fill="#8FB3AE"/>
+<text x="628" y="75" text-anchor="end" fill="#16202A">121 </text>
+<text x="12" y="101" fill="#5B6B7A">pr rep 0 · errors</text>
+<rect x="230" y="90" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="90" width="2.0" height="14" fill="#8FB3AE"/>
+<text x="628" y="101" text-anchor="end" fill="#16202A">0 </text>
+<text x="12" y="127" fill="#5B6B7A">pr rep 0 · canary mismatches</text>
+<rect x="230" y="116" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="116" width="2.0" height="14" fill="#8FB3AE"/>
+<text x="628" y="127" text-anchor="end" fill="#16202A">0 </text>
+<text x="12" y="153" fill="#5B6B7A">base rep 0 · completions</text>
+<rect x="230" y="142" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="142" width="320.0" height="14" fill="#0F766E"/>
+<text x="628" y="153" text-anchor="end" fill="#16202A">161 </text>
+<text x="12" y="179" fill="#5B6B7A">base rep 0 · aborts</text>
+<rect x="230" y="168" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="168" width="244.5" height="14" fill="#8FB3AE"/>
+<text x="628" y="179" text-anchor="end" fill="#16202A">123 </text>
+<text x="12" y="205" fill="#5B6B7A">base rep 0 · errors</text>
+<rect x="230" y="194" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="194" width="2.0" height="14" fill="#8FB3AE"/>
+<text x="628" y="205" text-anchor="end" fill="#16202A">0 </text>
+<text x="12" y="231" fill="#5B6B7A">base rep 0 · canary mismatches</text>
+<rect x="230" y="220" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="220" width="2.0" height="14" fill="#8FB3AE"/>
+<text x="628" y="231" text-anchor="end" fill="#16202A">0 </text>
+</svg>
+<details><summary>machine state after the suite</summary>
+<li><code>pr</code> rep 0: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2184 MHz, 59, [N/A], [N/A], 0 %&quot;], &quot;load&quot;: &quot;load average: 4.46, 5.88, 4.12&quot;, &quot;container&quot;: &quot;92 pids 3.798GiB / 121.7GiB&quot;, &quot;mem_available_mb&quot;: &quot;25377&quot;}}</code></li>
+<li><code>base</code> rep 0: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2184 MHz, 60, [N/A], [N/A], 0 %&quot;], &quot;load&quot;: &quot;load average: 4.78, 6.25, 5.66&quot;, &quot;container&quot;: &quot;92 pids 3.784GiB / 121.7GiB&quot;, &quot;mem_available_mb&quot;: &quot;25407&quot;}}</code></li>
+</details>
+<h2>concurrency</h2>
+<table>
+<tr><th>target</th><th>rep</th><th>streams</th><th>aggregate tok/s</th><th>first token p50 / p95</th><th>batched replies ≠ serial</th><th>errors</th></tr>
+<tr><td><code>pr</code></td><td>0</td><td>1 (round 0)</td><td><strong>57.8</strong></td><td>0.246 / 0.262 s</td><td>—</td><td></td></tr>
+<tr><td><code>pr</code></td><td>0</td><td>4 (round 0)</td><td><strong>100.2</strong></td><td>0.82 / 1.185 s</td><td>0 of 16</td><td></td></tr>
+<tr><td><code>pr</code></td><td>0</td><td>8 (round 0)</td><td><strong>116.8</strong></td><td>1.445 / 2.649 s</td><td>0 of 16</td><td></td></tr>
+<tr><td><code>pr</code></td><td>0</td><td>16 (round 0)</td><td><strong>131.0</strong></td><td>2.734 / 5.28 s</td><td>0 of 16</td><td>0</td></tr>
+<tr><td><code>pr</code></td><td>0</td><td>1 (round 1)</td><td><strong>57.3</strong></td><td>0.247 / 0.313 s</td><td>—</td><td></td></tr>
+<tr><td><code>pr</code></td><td>0</td><td>4 (round 1)</td><td><strong>98.0</strong></td><td>0.828 / 1.367 s</td><td>0 of 16</td><td></td></tr>
+<tr><td><code>pr</code></td><td>0</td><td>8 (round 1)</td><td><strong>121.7</strong></td><td>1.418 / 2.377 s</td><td>0 of 16</td><td></td></tr>
+<tr><td><code>pr</code></td><td>0</td><td>16 (round 1)</td><td><strong>129.2</strong></td><td>2.731 / 5.197 s</td><td>0 of 16</td><td>0</td></tr>
+<tr><td><code>base</code></td><td>0</td><td>1 (round 0)</td><td><strong>58.0</strong></td><td>0.246 / 0.259 s</td><td>—</td><td></td></tr>
+<tr><td><code>base</code></td><td>0</td><td>4 (round 0)</td><td><strong>100.2</strong></td><td>0.823 / 1.146 s</td><td>0 of 16</td><td></td></tr>
+<tr><td><code>base</code></td><td>0</td><td>8 (round 0)</td><td><strong>120.3</strong></td><td>1.443 / 2.425 s</td><td>0 of 16</td><td></td></tr>
+<tr><td><code>base</code></td><td>0</td><td>16 (round 0)</td><td><strong>132.0</strong></td><td>2.74 / 5.211 s</td><td>0 of 16</td><td>0</td></tr>
+<tr><td><code>base</code></td><td>0</td><td>1 (round 1)</td><td><strong>58.0</strong></td><td>0.246 / 0.298 s</td><td>—</td><td></td></tr>
+<tr><td><code>base</code></td><td>0</td><td>4 (round 1)</td><td><strong>101.8</strong></td><td>0.825 / 1.13 s</td><td>0 of 16</td><td></td></tr>
+<tr><td><code>base</code></td><td>0</td><td>8 (round 1)</td><td><strong>122.1</strong></td><td>1.427 / 2.393 s</td><td>0 of 16</td><td></td></tr>
+<tr><td><code>base</code></td><td>0</td><td>16 (round 1)</td><td><strong>131.9</strong></td><td>2.746 / 5.281 s</td><td>0 of 16</td><td>0</td></tr>
+</table>
+<p><code>pr</code> rep 0: 128 requests; batched replies identical to serial in 96 of 96 comparisons</p>
+<li>host <code>spark-123</code>: container memory 4198.4 → 4215.8 MB after the drain (<strong>+17.4 MB</strong>, +135.9 MB per 1000 requests); descriptors 223 → 223</li>
+<li>host <code>spark-161</code>: container memory 2920.4 → 2940.9 MB after the drain (<strong>+20.5 MB</strong>, +160.2 MB per 1000 requests); descriptors 150 → 150</li>
+<li>host <code>spark-197</code>: container memory 3003.4 → 3022.8 MB after the drain (<strong>+19.4 MB</strong>, +151.6 MB per 1000 requests); descriptors 150 → 147</li>
+<li>host <code>dell-113</code>: container memory 3047.4 → 3066.9 MB after the drain (<strong>+19.5 MB</strong>, +152.3 MB per 1000 requests); descriptors 150 → 150</li>
+<p><code>base</code> rep 0: 128 requests; batched replies identical to serial in 96 of 96 comparisons</p>
+<li>host <code>spark-123</code>: container memory 4131.8 → 4191.2 MB after the drain (<strong>+59.4 MB</strong>, +464.1 MB per 1000 requests); descriptors 223 → 223</li>
+<li>host <code>spark-161</code>: container memory 2867.2 → 2926.6 MB after the drain (<strong>+59.4 MB</strong>, +464.1 MB per 1000 requests); descriptors 150 → 150</li>
+<li>host <code>spark-197</code>: container memory 3029.0 → 3088.4 MB after the drain (<strong>+59.4 MB</strong>, +464.1 MB per 1000 requests); descriptors 150 → 150</li>
+<li>host <code>dell-113</code>: container memory 2993.2 → 3051.5 MB after the drain (<strong>+58.3 MB</strong>, +455.5 MB per 1000 requests); descriptors 150 → 150</li>
+<details><summary>machine state after the suite</summary>
+<li><code>pr</code> rep 0: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2184 MHz, 57, [N/A], [N/A], 0 %&quot;], &quot;load&quot;: &quot;load average: 3.13, 4.89, 4.17&quot;, &quot;container&quot;: &quot;92 pids 4.118GiB / 121.7GiB&quot;, &quot;mem_available_mb&quot;: &quot;24884&quot;}}</code></li>
+<li><code>base</code> rep 0: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2184 MHz, 57, [N/A], [N/A], 0 %&quot;], &quot;load&quot;: &quot;load average: 2.70, 4.82, 5.24&quot;, &quot;container&quot;: &quot;92 pids 4.094GiB / 121.7GiB&quot;, &quot;mem_available_mb&quot;: &quot;24923&quot;}}</code></li>
+</details>
+<h2>the pull request&#x27;s own tests</h2>
+<p>The pull request adds or changes no test file under <code>tests/</code>.</p>
+<h2>What this run does not show</h2>
+<li>a clean pair exit and recovery after an injected read fault (<code>fault</code> did not run)</li>
+<li>an external benchmark against a control (The Grill or similar) (<code>bench</code> did not run)</li>
+<li>&lt;!-- add: paths only checked by reading, faults not injected, configurations not run --&gt;</li>
+<p><em>Generated by inference-agent-kit <code>report.py</code> from <code>20261102T233015/results.json</code>.</em></p></div>
