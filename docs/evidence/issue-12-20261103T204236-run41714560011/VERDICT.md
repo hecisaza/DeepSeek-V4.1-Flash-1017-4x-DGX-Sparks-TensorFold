@@ -1,0 +1,12 @@
+**Issue outcome: NOT REPRODUCIBLE HERE** (label `issue:not-reproducible`)
+
+- the agent tried on the live build, with its current configuration, and the problem did not show
+
+Facts:
+
+- triage: api (medium confidence): The first sampled (non-greedy) request after a period of idle pays a ~70-165 s first-token stall and decodes at about half speed (37.8 vs 68 tok/s), while greedy requests after the same idle and warm sampled requests are at spec. The maintainer has not reproduced it on the ring and asks for an after-idle run on current main, which separates a first-use cost from an idle one.
+- triage, what shows it: Against the live build, streaming chat completions, one stream, the same prompt each time, thinking off via chat_template_kwargs, max_tokens 300. Record the time to the first streamed token and the decode tok/s for each. (1) Send a sampled request (temperature unset or 0.7) and then a greedy one (temperature 0) to get warm baselines. (2) Send no requests for 60+ minutes, then send the sampled request and right away the same request again. Look for a first-token time of tens of seconds and roughly half-rate decode on the first one only, with the second near 0.1 s and ~60-68 tok/s. (3) After another 60+ minute idle, send the greedy request first and check that it is fast. This is the control that shows the cost is specific to the sampled path. If no request at all is slow, it stays unreproduced on this build (the report was on a switched mesh with an image from before 0034, ABLIT=1). A cost on the first sampled request after a fresh start (the second comment saw ~1/3 slower decode on the first two sampled replies, with normal first-token time) would need a restart and is a lab item.
+- patches named: 0034, 0026, 0021
+- the agent's verdict on the live build: not-reproduced
+
+_FIXED means the fix is verified on hardware, not merged. NEEDS THE LAB and REPRODUCED are for a person to pick up._

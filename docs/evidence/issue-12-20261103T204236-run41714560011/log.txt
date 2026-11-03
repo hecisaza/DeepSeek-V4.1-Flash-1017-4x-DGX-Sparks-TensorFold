@@ -1,0 +1,7 @@
+20:39:48 issue https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/12 -> branch in hecisaza/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold; work dir /root/actions-runner/_work/_temp/issues/MiaAI-Lab-DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold-12
+20:39:48 live build: DeepSeek-V4.1-Flash-1017 at http://[address]:8888/v1
+20:40:00 triage agent: claude -p --permission-mode acceptEdits --allowedTools "Bash,Read,Edit,Write,Glob,Grep,WebFetch" (timeout 900s)
+20:40:33 triage: api: The first sampled (non-greedy) request after a period of idle pays a ~70-165 s first-token stall and decodes at about half speed (37.8 vs 68 tok/s), while greedy requests after the same idle and warm sampled requests are at spec. The maintainer has not reproduced it on the ring and asks for an after-idle run on current main, which separates a first-use cost from an idle one.
+20:40:33 agent: claude -p --permission-mode acceptEdits --allowedTools "Bash,Read,Edit,Write,Glob,Grep,WebFetch" (timeout 7200s)
+20:42:22 agent exit 0 (30 lines in agent.log)
+20:42:22 agent verdict: not-reproduced
