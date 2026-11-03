@@ -1,0 +1,98 @@
+diff --git a/zig/src/server/reply_text.zig b/zig/src/server/reply_text.zig
+index 8b132bc..768202f 100644
+--- a/zig/src/server/reply_text.zig
++++ b/zig/src/server/reply_text.zig
+@@ -32,6 +32,19 @@ fn find(text: []const u8, tag: []const u8) ?usize {
+     return findTag(text, 0, tag);
+ }
+ 
++fn isDsml(opener: []const u8) bool {
++    return std.mem.indexOf(u8, opener, "\u{ff5c}DSML\u{ff5c}") != null;
++}
++
++/// Where the call block opened before ``from`` closes: the index of its closer. A DSML block closes at the last closer
++/// before the next opener, since its string values are not escaped: a value that holds the closer (a file about DSML)
++/// would otherwise end the block early, drop the call, and leave the block's own closers as the reply's text.
++pub fn blockEnd(text: []const u8, from: usize, opener: []const u8, closer: []const u8) ?usize {
++    if (!isDsml(opener)) return findTag(text, from, closer);
++    const limit = findTag(text, from, opener) orelse text.len;
++    return if (std.mem.lastIndexOf(u8, text[from..limit], closer)) |i| from + i else null;
++}
++
+ pub fn isChannel(m: Markers) bool {
+     return std.mem.eql(u8, m.close, channel_markers.close);
+ }
+@@ -125,7 +138,9 @@ pub fn hideInto(a: Allocator, out: *std.ArrayList(u8), text: []const u8, finishe
+         }
+         try out.appendSlice(a, text[pos..start.?]);
+         const opener = calls[which][0];
+-        const end = findTag(text, start.? + opener.len, calls[which][1]) orelse return out.items;
++        // a later closer may still close a DSML block (blockEnd), so it stays hidden until the reply ends
++        if (!finished and isDsml(opener)) return out.items;
++        const end = blockEnd(text, start.? + opener.len, opener, calls[which][1]) orelse return out.items;
+         pos = end + calls[which][1].len;
+     }
+ }
+diff --git a/zig/src/server/tool_parse.zig b/zig/src/server/tool_parse.zig
+index 13db584..48b0641 100644
+--- a/zig/src/server/tool_parse.zig
++++ b/zig/src/server/tool_parse.zig
+@@ -86,13 +86,13 @@ fn envelopes(a: Allocator, text: []const u8) Allocator.Error![]Envelope {
+     }
+     pos = 0;
+     while (find(text, dsml_open, pos)) |s| {
+-        const e = find(text, dsml_close, s + dsml_open.len) orelse break;
++        const e = reply_text.blockEnd(text, s + dsml_open.len, dsml_open, dsml_close) orelse break;
+         try found.append(a, .{ .start = s, .end = e + dsml_close.len, .payload = text[s .. e + dsml_close.len] });
+         pos = e + dsml_close.len;
+     }
+     pos = 0;
+     while (find(text, dsml41_open, pos)) |s| {
+-        const e = find(text, dsml41_close, s + dsml41_open.len) orelse break;
++        const e = reply_text.blockEnd(text, s + dsml41_open.len, dsml41_open, dsml41_close) orelse break;
+         try found.append(a, .{ .start = s, .end = e + dsml41_close.len, .payload = text[s .. e + dsml41_close.len] });
+         pos = e + dsml41_close.len;
+     }
+diff --git a/zig/src/server/tool_parse_test.zig b/zig/src/server/tool_parse_test.zig
+index 5516e48..c03f14e 100644
+--- a/zig/src/server/tool_parse_test.zig
++++ b/zig/src/server/tool_parse_test.zig
+@@ -151,3 +151,38 @@ test "DeepSeek-V4.1's DSML calls, read as the served lane reads them" {
+     const open = "Hi.<" ++ D ++ " calls>\n<" ++ D ++ " invoke name=\"weather\">";
+     try std.testing.expectEqualStrings(open, (try parse(a, open, tools, null)).content);
+ }
++
++test "a DSML value that holds the block's closer stays in the call, and no closer reaches the text" {
++    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
++    defer arena.deinit();
++    const a = arena.allocator();
++    const reply_text = @import("reply_text.zig");
++    const tools = (try json.parse(a, "[{\"type\":\"function\",\"function\":{\"name\":\"write\"}}]")).ok.array;
++    const D = "\u{ff5c}DSML\u{ff5c}";
++    // DeepSeek-V4.1's spelling and V4's: a file written by the call ends with the block's own closer
++    const blocks = [_][2][]const u8{
++        .{ "<" ++ D ++ " calls>\n<" ++ D ++ " invoke name=\"write\">\n<" ++ D ++ " parameter name=\"content\" string=\"true\">end: </" ++ D ++ " calls></" ++ D ++ " parameter>\n</" ++ D ++ " invoke>\n</" ++ D ++ " calls>", "{\"content\":\"end: </" ++ D ++ " calls>\"}" },
++        .{ "<" ++ D ++ "tool_calls>\n<" ++ D ++ "invoke name=\"write\">\n<" ++ D ++ "parameter name=\"content\" string=\"true\">end: </" ++ D ++ "tool_calls></" ++ D ++ "parameter>\n</" ++ D ++ "invoke>\n</" ++ D ++ "tool_calls>", "{\"content\":\"end: </" ++ D ++ "tool_calls>\"}" },
++    };
++    for (blocks) |b| {
++        const r = try parse(a, b[0], tools, null);
++        try std.testing.expectEqual(@as(usize, 1), r.calls.?.len);
++        try std.testing.expectEqualStrings(b[1], r.calls.?[0].get("function").?.get("arguments").?.string);
++        try std.testing.expectEqualStrings("", r.content);
++        // streamed: nothing of the block shows while it is written, nor when it ends
++        for (0..b[0].len + 1) |n| try std.testing.expectEqualStrings("", try reply_text.hideToolCalls(a, b[0][0..n], false));
++        try std.testing.expectEqualStrings("", try reply_text.hideToolCalls(a, b[0], true));
++        // prose around the block: before it streams, after it shows when the reply ends
++        const around = try std.mem.concat(a, u8, &.{ "Writing.\n\n", b[0], "\nDone." });
++        try std.testing.expectEqualStrings("Writing.\n\n", try reply_text.hideToolCalls(a, around, false));
++        try std.testing.expectEqualStrings("Writing.\n\n\nDone.", try reply_text.hideToolCalls(a, around, true));
++        try std.testing.expectEqualStrings("Writing.\n\n\nDone.", (try parse(a, around, tools, null)).content);
++    }
++    // two blocks: each closes before the next one opens, so the prose between them stays
++    const one = blocks[0][0];
++    const twice = try std.mem.concat(a, u8, &.{ one, "\nThen.\n", one });
++    const r2 = try parse(a, twice, tools, null);
++    try std.testing.expectEqual(@as(usize, 2), r2.calls.?.len);
++    try std.testing.expectEqualStrings("Then.", r2.content);
++    try std.testing.expectEqualStrings("\nThen.\n", try reply_text.hideToolCalls(a, twice, true));
++}
