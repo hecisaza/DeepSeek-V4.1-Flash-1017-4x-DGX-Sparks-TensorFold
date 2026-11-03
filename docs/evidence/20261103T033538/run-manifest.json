@@ -1,0 +1,17 @@
+{
+ "pr_repo": "hecisaza/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold",
+ "pr": 5,
+ "pr_url": "https://github.com/hecisaza/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/5",
+ "pr_state": "open",
+ "pr_closed_at": "",
+ "head_sha": "1ffce947bac2c584baca5ec9f7a7a3b9206b5a6c",
+ "base_sha": "97fdffb9e9ab8b7c88e44c706146b7a4757e3a53",
+ "candidate_sha": "a9a25f1b9c27bd425e56656597043bac363853ee",
+ "candidate_kind": "merged onto the current base",
+ "head_ref": "sens/decode",
+ "base_ref": "main",
+ "switches": "lab",
+ "workflow_run": "41571706340",
+ "dispatched_by": "hecisaza",
+ "event": "workflow_dispatch"
+}
