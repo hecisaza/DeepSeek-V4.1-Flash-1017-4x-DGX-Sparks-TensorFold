@@ -1,16 +1,15 @@
 Subject: SENSITIVITY CHECK, do not merge: 8 MiB of host memory kept per request
 
 diff --git a/zig/src/server/chat.zig b/zig/src/server/chat.zig
-index 80faee37..2084f29f 100644
+index 80faee37..255b7a84 100644
 --- a/zig/src/server/chat.zig
 +++ b/zig/src/server/chat.zig
-@@ -238,6 +238,9 @@ pub fn generate(srv: *Server, cx: *Cx, prepared: Prepared, sink: ?Sink, gone: an
+@@ -238,6 +238,8 @@ pub fn generate(srv: *Server, cx: *Cx, prepared: Prepared, sink: ?Sink, gone: an
      var box: Mailbox = .{ .io = io, .gpa = srv.gpa };
      defer box.deinit();
      const id = srv.next_id.fetchAdd(1, .monotonic);
 +    // SENSITIVITY CHECK (do not merge): 8 MiB of touched host memory per request, never freed
-+    const junk = srv.gpa.alloc(u8, 8 << 20) catch &[_]u8{};
-+    @memset(junk, @as(u8, @truncate(id)));
++    if (srv.gpa.alloc(u8, 8 << 20)) |junk| @memset(junk, @as(u8, @truncate(id))) else |_| {}
      const submitted = nowNs(io);
      if (srv.keepalive) |k| k.begin(); // the GPU is busy: the idle ticker holds its commits
      defer if (srv.keepalive) |k| k.end();
