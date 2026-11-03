@@ -348,3 +348,10 @@ jobs:
           git -C fork push -q origin HEAD:main
           gh workflow run spark-test.yml -R "$THIS_REPO" -f "pr=$PR_URL" -f "attempt=2" ${SUITES:+-f "suites=$SUITES"} ${REPS:+-f "reps=$REPS"}
           echo "claim committed as claims/$SLUG-pr-$PR.sh; attempt 2 dispatched" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: A RERUN verdict is measured again even without a claim test (attempt 2, counterbalanced; the cap)
+        if: steps.claim.outputs.ok != 'yes' && needs.test.outputs.verdict == 'RERUN'
+        run: |
+          R=$REPS; [ "${R:-1}" -ge 2 ] 2>/dev/null || R=2
+          gh workflow run spark-test.yml -R "$THIS_REPO" -f "pr=$PR_URL" -f "attempt=2" ${SUITES:+-f "suites=$SUITES"} -f "reps=$R"
+          echo "RERUN without a claim test: attempt 2 dispatched with reps=$R" >> "$GITHUB_STEP_SUMMARY"
