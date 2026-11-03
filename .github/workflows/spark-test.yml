@@ -91,6 +91,13 @@ jobs:
         run: |
           if [[ "$PR_INPUT" =~ ^https://github\.com/([^/]+/[^/]+)/pull/([0-9]+) ]]; then PR_REPO=${BASH_REMATCH[1]}; PR=${BASH_REMATCH[2]}
           else PR_REPO=$THIS_REPO; PR=$PR_INPUT; fi
+          # GitHub computes mergeability asynchronously: right after a push to the branch it reports UNKNOWN and no merge
+          # commit for a while, and the PR would be tested as its head on the merge-base; wait for an answer first
+          for i in $(seq 1 18); do
+            M=$(gh pr view "$PR" -R "$PR_REPO" --json mergeable --jq .mergeable 2>/dev/null || echo UNKNOWN)
+            [ "$M" = UNKNOWN ] || break
+            echo "mergeability not computed yet ($i); waiting"; sleep 10
+          done
           { echo "PR_REPO=$PR_REPO"; echo "PR=$PR"
             gh pr view "$PR" -R "$PR_REPO" --json headRefOid,baseRefOid,headRefName,baseRefName,isCrossRepository,url,mergeable,potentialMergeCommit,state,mergedAt,closedAt \
               --jq '"HEAD_SHA=\(.headRefOid)\nBASE_SHA=\(.baseRefOid)\nHEAD_REF=\(.headRefName)\nBASE_REF=\(.baseRefName)\nPR_URL=\(.url)\nCROSS=\(.isCrossRepository)\nMERGEABLE=\(.mergeable)\nMERGE_SHA=\(.potentialMergeCommit.oid // "")\nPR_STATE=\(.state | ascii_downcase)\nPR_CLOSED_AT=\(.mergedAt // .closedAt // "")"'
