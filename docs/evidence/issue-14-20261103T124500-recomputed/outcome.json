@@ -1,0 +1,24 @@
+{
+ "issue_url": "https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/14",
+ "issue_repo": "MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold",
+ "n": 14,
+ "repo": "hecisaza/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold",
+ "branch": "agent/issue-14",
+ "live_model": "DeepSeek-V4.1-Flash-1017",
+ "triage": {
+  "kind": "api",
+  "why": "In long omp agent sessions at 300K tokens of context or more, 9 of 175 turns ended with finish_reason stop and about 1 reasoning token, and their content was only orphan DSML closing tags (</\uff5cDSML\uff5c parameter>, </\uff5cDSML\uff5c invoke>, </\uff5cDSML\uff5c calls>) with no opener and no parsed tool call. The reporter suspects the recipe's default top_p 1.0, since their previous stack ran top_p 0.95 and had 0 leaks in 2,507 deep turns.",
+  "repro": "Against the live build, send chat completions with `tools` and `reasoning_effort: low` (thinking on, temperature 1.0, top_k 20). Each request should carry an agent-style history of 300K tokens or more, with earlier assistant tool calls and tool results replayed in it, the way omp replays them. Set `return_token_ids` on every request. Run a batch with the server default top_p 1.0 and a matched, counterbalanced batch with a per-request `top_p: 0.95` (a request's own value overrides the server default). A leak is a reply with finish_reason stop, about 1 reasoning token, content made only of DSML closers, no tool_calls, and `tensorfold.tool_parse_warning: orphan_dsml_closers` (patch 0043). Count the leak rate in each arm; the reported rate is about 5%, so each arm needs on the order of 100 or more deep turns. For each leaked turn, check the returned token ids to see whether the model sampled the closer tokens directly or an opener was emitted and then dropped. Keep concurrency within the served parallel limit so the deep requests stay in normal load.",
+  "patches": [
+   "0043"
+  ],
+  "confidence": "medium"
+ },
+ "agent_verdict": "reproduced",
+ "live_repro_exit": 1,
+ "fix_commits": 2,
+ "pr_url": "https://github.com/hecisaza/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/6",
+ "result": "pr",
+ "detail": "recomputed: the agent's run (41543809324) reproduced the problem and pushed the fix, but GitHub Actions may not open pull requests on this repository; the pull request was opened by hand from the agent's branch and tested by spark-test (run 41621338659)",
+ "when": "2026-11-03T12:45:00+00:00"
+}

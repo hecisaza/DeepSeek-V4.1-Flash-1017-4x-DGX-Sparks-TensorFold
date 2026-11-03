@@ -1,0 +1,31 @@
+{
+ "class": "FIXED",
+ "label": "issue:fixed",
+ "reasons": [
+  "the fix passed its test run as READY: reproduction fails on the base and passes on the fix, with the oracle audited"
+ ],
+ "facts": [
+  "triage: api (medium confidence): In long omp agent sessions at 300K tokens of context or more, 9 of 175 turns ended with finish_reason stop and about 1 reasoning token, and their content was only orphan DSML closing tags (</\uff5cDSML\uff5c parameter>, </\uff5cDSML\uff5c invoke>, </\uff5cDSML\uff5c calls>) with no opener and no parsed tool call. The reporter suspects the recipe's default top_p 1.0, since their previous stack ran top_p 0.95 and had 0 leaks in 2,507 deep turns.",
+  "triage, what shows it: Against the live build, send chat completions with `tools` and `reasoning_effort: low` (thinking on, temperature 1.0, top_k 20). Each request should carry an agent-style history of 300K tokens or more, with earlier assistant tool calls and tool results replayed in it, the way omp replays them. Set `return_token_ids` on every request. Run a batch with the server default top_p 1.0 and a matched, counterbalanced batch with a per-request `top_p: 0.95` (a request's own value overrides the server default). A leak is a reply with finish_reason stop, about 1 reasoning token, content made only of DSML closers, no tool_calls, and `tensorfold.tool_parse_warning: orphan_dsml_closers` (patch 0043). Count the leak rate in each arm; the reported rate is about 5%, so each arm needs on the order of 100 or more deep turns. For each leaked turn, check the returned token ids to see whether the model sampled the closer tokens directly or an opener was emitted and then dropped. Keep concurrency within the served parallel limit so the deep requests stay in normal load.",
+  "patches named: 0043",
+  "the agent's verdict on the live build: reproduced",
+  "the agent's reproduction script on the live build: exit 1, the problem shows",
+  "fix: 2 commit(s) on agent/issue-14",
+  "pull request: https://github.com/hecisaza/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/6",
+  "the pull request's test run: READY",
+  "  test run: every suite green, no slowdown beyond the band; the repro script fails on the base and passes on the candidate, and the second opinion found its oracle sound"
+ ],
+ "issue": "https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/14",
+ "pr": "https://github.com/hecisaza/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/6",
+ "test_class": "READY",
+ "triage": {
+  "kind": "api",
+  "why": "In long omp agent sessions at 300K tokens of context or more, 9 of 175 turns ended with finish_reason stop and about 1 reasoning token, and their content was only orphan DSML closing tags (</\uff5cDSML\uff5c parameter>, </\uff5cDSML\uff5c invoke>, </\uff5cDSML\uff5c calls>) with no opener and no parsed tool call. The reporter suspects the recipe's default top_p 1.0, since their previous stack ran top_p 0.95 and had 0 leaks in 2,507 deep turns.",
+  "repro": "Against the live build, send chat completions with `tools` and `reasoning_effort: low` (thinking on, temperature 1.0, top_k 20). Each request should carry an agent-style history of 300K tokens or more, with earlier assistant tool calls and tool results replayed in it, the way omp replays them. Set `return_token_ids` on every request. Run a batch with the server default top_p 1.0 and a matched, counterbalanced batch with a per-request `top_p: 0.95` (a request's own value overrides the server default). A leak is a reply with finish_reason stop, about 1 reasoning token, content made only of DSML closers, no tool_calls, and `tensorfold.tool_parse_warning: orphan_dsml_closers` (patch 0043). Count the leak rate in each arm; the reported rate is about 5%, so each arm needs on the order of 100 or more deep turns. For each leaked turn, check the returned token ids to see whether the model sampled the closer tokens directly or an opener was emitted and then dropped. Keep concurrency within the served parallel limit so the deep requests stay in normal load.",
+  "patches": [
+   "0043"
+  ],
+  "confidence": "medium"
+ },
+ "result": "pr"
+}
