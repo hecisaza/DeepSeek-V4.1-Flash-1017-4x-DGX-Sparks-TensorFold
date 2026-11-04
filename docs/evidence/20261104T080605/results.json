@@ -1,0 +1,597 @@
+{
+ "meta": {
+  "targets_order": [
+   "pr",
+   "base"
+  ],
+  "candidate": "pr",
+  "control": "base",
+  "suites": [
+   "perf",
+   "repro"
+  ],
+  "opts": {
+   "reps": "4",
+   "repro_cmd": "bash tests/repro-issue-14.sh {api} {model} {logcmd}"
+  },
+  "started": "2026-11-04T08:06:05",
+  "kit": "6cc9b1d",
+  "fabric": "ring",
+  "conditions": "",
+  "order": "counterbalanced over 4 repetitions: A B, then B A",
+  "targets": {
+   "pr": {
+    "backend": "recipe-docker",
+    "image": "tensorfold-dsv41:pr-18c4b5b5",
+    "artifact": null,
+    "model": "DeepSeek-V4.1-Flash-1017",
+    "chunk": 2048,
+    "env": {},
+    "artifact_id": "c51bfb3e7446"
+   },
+   "base": {
+    "backend": "recipe-docker",
+    "image": "tensorfold-dsv41:base-57c739cb",
+    "artifact": null,
+    "model": "DeepSeek-V4.1-Flash-1017",
+    "chunk": 2048,
+    "env": {},
+    "artifact_id": "5a94966d9621"
+   }
+  },
+  "restore": "live restored (verified: API answers, running artifact is live's)"
+ },
+ "perf": {
+  "pr": [
+   {
+    "ok": true,
+    "decode_tps": [
+     60.0,
+     56.4,
+     59.1
+    ],
+    "prefill_tps": [
+     2951.6,
+     3013.1,
+     2835.1
+    ],
+    "batch_tps": [
+     134.0,
+     136.6,
+     127.8
+    ],
+    "decode_keys": [
+     "0:b4f368926e94",
+     "1:57f79aed8dff",
+     "2:8221184cc4e0"
+    ],
+    "prefill_keys": [
+     "0:1d31ced8d104",
+     "1:eb7344ee252d",
+     "2:709ac335076e"
+    ],
+    "batch_keys": [
+     "0:a9a103f5331c",
+     "1:96264efac35c",
+     "2:8abe71c6676c"
+    ],
+    "prompt_tokens": 12004,
+    "streams": 4,
+    "errors": [],
+    "probe": {
+     "head": {
+      "gpus": [
+       "0, NVIDIA GB10, 2184 MHz, 58, [N/A], [N/A], 0 %"
+      ],
+      "load": "load average: 7.34, 3.94, 2.55",
+      "container": "92 pids 3.107GiB / 121.7GiB",
+      "mem_available_mb": "27776"
+     }
+    }
+   },
+   {
+    "ok": true,
+    "decode_tps": [
+     57.9,
+     55.1,
+     61.8
+    ],
+    "prefill_tps": [
+     3124.4,
+     3152.3,
+     3149.8
+    ],
+    "batch_tps": [
+     138.6,
+     127.3,
+     137.6
+    ],
+    "decode_keys": [
+     "0:2e464524c0f1",
+     "1:dd31df34a968",
+     "2:9f1a0a027668"
+    ],
+    "prefill_keys": [
+     "0:2635201fa7ed",
+     "1:8827ef4640ff",
+     "2:43af66e36bf7"
+    ],
+    "batch_keys": [
+     "0:a2d17a334886",
+     "1:87e815b80cc7",
+     "2:c82894d5faf2"
+    ],
+    "prompt_tokens": 12004,
+    "streams": 4,
+    "errors": [],
+    "probe": {
+     "head": {
+      "gpus": [
+       "0, NVIDIA GB10, 2177 MHz, 62, [N/A], [N/A], 96 %"
+      ],
+      "load": "load average: 6.79, 6.13, 4.00",
+      "container": "92 pids 3.134GiB / 121.7GiB",
+      "mem_available_mb": "27730"
+     }
+    }
+   },
+   {
+    "ok": true,
+    "decode_tps": [
+     57.7,
+     63.3,
+     56.8
+    ],
+    "prefill_tps": [
+     3198.5,
+     3075.6,
+     3149.0
+    ],
+    "batch_tps": [
+     131.6,
+     129.5,
+     127.9
+    ],
+    "decode_keys": [
+     "0:8e8f75158c62",
+     "1:0a243b66f01f",
+     "2:49e63a87dd9d"
+    ],
+    "prefill_keys": [
+     "0:81e5ff0c07e7",
+     "1:fd3d251f334a",
+     "2:a01df4092ec6"
+    ],
+    "batch_keys": [
+     "0:a880b625a012",
+     "1:68480ab9dce6",
+     "2:837731c31b90"
+    ],
+    "prompt_tokens": 12004,
+    "streams": 4,
+    "errors": [],
+    "probe": {
+     "head": {
+      "gpus": [
+       "0, NVIDIA GB10, 2171 MHz, 62, [N/A], [N/A], 96 %"
+      ],
+      "load": "load average: 5.87, 5.95, 4.04",
+      "container": "92 pids 3.187GiB / 121.7GiB",
+      "mem_available_mb": "27644"
+     }
+    }
+   },
+   {
+    "ok": true,
+    "decode_tps": [
+     60.2,
+     56.7,
+     56.6
+    ],
+    "prefill_tps": [
+     3133.4,
+     3186.6,
+     3130.1
+    ],
+    "batch_tps": [
+     129.5,
+     134.0,
+     141.8
+    ],
+    "decode_keys": [
+     "0:f1d16ecbdf89",
+     "1:78ce6cdbb95b",
+     "2:8b1c0f742807"
+    ],
+    "prefill_keys": [
+     "0:f901d96e93ef",
+     "1:46211d6eb70f",
+     "2:26c38b03029a"
+    ],
+    "batch_keys": [
+     "0:1a44b765d446",
+     "1:81f8ff80c4fb",
+     "2:039d9626983f"
+    ],
+    "prompt_tokens": 12004,
+    "streams": 4,
+    "errors": [],
+    "probe": {
+     "head": {
+      "gpus": [
+       "0, NVIDIA GB10, 2171 MHz, 63, [N/A], [N/A], 96 %"
+      ],
+      "load": "load average: 7.18, 6.94, 5.08",
+      "container": "92 pids 3.119GiB / 121.7GiB",
+      "mem_available_mb": "27701"
+     }
+    }
+   }
+  ],
+  "base": [
+   {
+    "ok": true,
+    "decode_tps": [
+     59.5,
+     57.4,
+     59.5
+    ],
+    "prefill_tps": [
+     3025.2,
+     3155.6,
+     3089.0
+    ],
+    "batch_tps": [
+     135.3,
+     139.0,
+     125.9
+    ],
+    "decode_keys": [
+     "0:b4f368926e94",
+     "1:57f79aed8dff",
+     "2:8221184cc4e0"
+    ],
+    "prefill_keys": [
+     "0:1d31ced8d104",
+     "1:eb7344ee252d",
+     "2:709ac335076e"
+    ],
+    "batch_keys": [
+     "0:a9a103f5331c",
+     "1:96264efac35c",
+     "2:8abe71c6676c"
+    ],
+    "prompt_tokens": 12004,
+    "streams": 4,
+    "errors": [],
+    "probe": {
+     "head": {
+      "gpus": [
+       "0, NVIDIA GB10, 2177 MHz, 59, [N/A], [N/A], 95 %"
+      ],
+      "load": "load average: 7.14, 5.44, 3.33",
+      "container": "92 pids 3.114GiB / 121.7GiB",
+      "mem_available_mb": "27704"
+     }
+    }
+   },
+   {
+    "ok": true,
+    "decode_tps": [
+     59.4,
+     55.0,
+     62.0
+    ],
+    "prefill_tps": [
+     3129.3,
+     3137.5,
+     3124.4
+    ],
+    "batch_tps": [
+     143.7,
+     128.5,
+     138.3
+    ],
+    "decode_keys": [
+     "0:2e464524c0f1",
+     "1:dd31df34a968",
+     "2:9f1a0a027668"
+    ],
+    "prefill_keys": [
+     "0:2635201fa7ed",
+     "1:8827ef4640ff",
+     "2:43af66e36bf7"
+    ],
+    "batch_keys": [
+     "0:a2d17a334886",
+     "1:87e815b80cc7",
+     "2:c82894d5faf2"
+    ],
+    "prompt_tokens": 12004,
+    "streams": 4,
+    "errors": [],
+    "probe": {
+     "head": {
+      "gpus": [
+       "0, NVIDIA GB10, 2177 MHz, 61, [N/A], [N/A], 0 %"
+      ],
+      "load": "load average: 6.44, 5.49, 3.45",
+      "container": "92 pids 3.169GiB / 121.7GiB",
+      "mem_available_mb": "27618"
+     }
+    }
+   },
+   {
+    "ok": true,
+    "decode_tps": [
+     56.8,
+     63.3,
+     59.0
+    ],
+    "prefill_tps": [
+     3013.1,
+     3163.1,
+     2946.5
+    ],
+    "batch_tps": [
+     119.5,
+     130.0,
+     128.8
+    ],
+    "decode_keys": [
+     "0:8e8f75158c62",
+     "1:0a243b66f01f",
+     "2:49e63a87dd9d"
+    ],
+    "prefill_keys": [
+     "0:81e5ff0c07e7",
+     "1:fd3d251f334a",
+     "2:a01df4092ec6"
+    ],
+    "batch_keys": [
+     "0:a880b625a012",
+     "1:68480ab9dce6",
+     "2:837731c31b90"
+    ],
+    "prompt_tokens": 12004,
+    "streams": 4,
+    "errors": [],
+    "probe": {
+     "head": {
+      "gpus": [
+       "0, NVIDIA GB10, 2171 MHz, 62, [N/A], [N/A], 78 %"
+      ],
+      "load": "load average: 6.70, 6.47, 4.53",
+      "container": "92 pids 3.134GiB / 121.7GiB",
+      "mem_available_mb": "27751"
+     }
+    }
+   },
+   {
+    "ok": true,
+    "decode_tps": [
+     62.0,
+     57.6,
+     56.7
+    ],
+    "prefill_tps": [
+     3118.7,
+     3101.8,
+     3139.1
+    ],
+    "batch_tps": [
+     127.7,
+     134.4,
+     141.4
+    ],
+    "decode_keys": [
+     "0:f1d16ecbdf89",
+     "1:78ce6cdbb95b",
+     "2:8b1c0f742807"
+    ],
+    "prefill_keys": [
+     "0:f901d96e93ef",
+     "1:46211d6eb70f",
+     "2:26c38b03029a"
+    ],
+    "batch_keys": [
+     "0:1a44b765d446",
+     "1:81f8ff80c4fb",
+     "2:039d9626983f"
+    ],
+    "prompt_tokens": 12004,
+    "streams": 4,
+    "errors": [],
+    "probe": {
+     "head": {
+      "gpus": [
+       "0, NVIDIA GB10, 2177 MHz, 64, [N/A], [N/A], 96 %"
+      ],
+      "load": "load average: 5.96, 6.28, 4.56",
+      "container": "92 pids 3.188GiB / 121.7GiB",
+      "mem_available_mb": "27617"
+     }
+    }
+   }
+  ]
+ },
+ "repro": {
+  "pr": [
+   {
+    "ok": true,
+    "role": "candidate",
+    "exit": 0,
+    "outcome": "passes",
+    "shows_problem": false,
+    "cmd": "bash tests/repro-issue-14.sh {api} {model} {logcmd}",
+    "output_tail": "control, whole: finish=tool_calls tool_calls=[[\"write\", {\"path\": \"notes.md\", \"content\": \"plain text\"}]] content=\"\"\ncontrol, stream: finish=tool_calls tool_calls=[[\"write\", {\"path\": \"notes.md\", \"content\": \"plain text\"}]] content=\"\"\nvalue holds the closer, whole: finish=tool_calls tool_calls=[[\"write\", {\"path\": \"notes.md\", \"content\": \"end of block: </\uff5cDSML\uff5c calls>\"}]] content=\"\"\nvalue holds the closer, stream: finish=tool_calls tool_calls=[[\"write\", {\"path\": \"notes.md\", \"content\": \"end of block: </\uff5cDSML\uff5c calls>\"}]] content=\"\"\ntwo calls, the first value holds the closer and <tool_call> markup, whole: finish=tool_calls tool_calls=[[\"write\", {\"path\": \"notes.md\", \"content\": \"</\uff5cDSML\uff5c calls><tool_call><function=write></function></tool_call>\"}], [\"write\", {\"path\": \"two.md\", \"content\": \"two\"}]] content=\"\"\ntwo calls, the first value holds the closer and <tool_call> markup, stream: finish=tool_calls tool_calls=[[\"write\", {\"path\": \"notes.md\", \"content\": \"</\uff5cDSML\uff5c calls><tool_call><function=write></function></tool_call>\"}], [\"write\", {\"path\": \"two.md\", \"content\": \"two\"}]] content=\"\"\nRESULT: fixed\n",
+    "probe": {
+     "head": {
+      "gpus": [
+       "0, NVIDIA GB10, 2184 MHz, 58, [N/A], [N/A], 94 %"
+      ],
+      "load": "load average: 6.77, 3.93, 2.56",
+      "container": "92 pids 3.16GiB / 121.7GiB",
+      "mem_available_mb": "27701"
+     }
+    }
+   },
+   {
+    "ok": true,
+    "role": "candidate",
+    "exit": 0,
+    "outcome": "passes",
+    "shows_problem": false,
+    "cmd": "bash tests/repro-issue-14.sh {api} {model} {logcmd}",
+    "output_tail": "control, whole: finish=tool_calls tool_calls=[[\"write\", {\"path\": \"notes.md\", \"content\": \"plain text\"}]] content=\"\"\ncontrol, stream: finish=tool_calls tool_calls=[[\"write\", {\"path\": \"notes.md\", \"content\": \"plain text\"}]] content=\"\"\nvalue holds the closer, whole: finish=tool_calls tool_calls=[[\"write\", {\"path\": \"notes.md\", \"content\": \"end of block: </\uff5cDSML\uff5c calls>\"}]] content=\"\"\nvalue holds the closer, stream: finish=tool_calls tool_calls=[[\"write\", {\"path\": \"notes.md\", \"content\": \"end of block: </\uff5cDSML\uff5c calls>\"}]] content=\"\"\ntwo calls, the first value holds the closer and <tool_call> markup, whole: finish=tool_calls tool_calls=[[\"write\", {\"path\": \"notes.md\", \"content\": \"</\uff5cDSML\uff5c calls><tool_call><function=write></function></tool_call>\"}], [\"write\", {\"path\": \"two.md\", \"content\": \"two\"}]] content=\"\"\ntwo calls, the first value holds the closer and <tool_call> markup, stream: finish=tool_calls tool_calls=[[\"write\", {\"path\": \"notes.md\", \"content\": \"</\uff5cDSML\uff5c calls><tool_call><function=write></function></tool_call>\"}], [\"write\", {\"path\": \"two.md\", \"content\": \"two\"}]] content=\"\"\nRESULT: fixed\n",
+    "probe": {
+     "head": {
+      "gpus": [
+       "0, NVIDIA GB10, 2177 MHz, 62, [N/A], [N/A], 95 %"
+      ],
+      "load": "load average: 6.12, 6.01, 3.99",
+      "container": "92 pids 3.187GiB / 121.7GiB",
+      "mem_available_mb": "27744"
+     }
+    }
+   },
+   {
+    "ok": true,
+    "role": "candidate",
+    "exit": 0,
+    "outcome": "passes",
+    "shows_problem": false,
+    "cmd": "bash tests/repro-issue-14.sh {api} {model} {logcmd}",
+    "output_tail": "control, whole: finish=tool_calls tool_calls=[[\"write\", {\"path\": \"notes.md\", \"content\": \"plain text\"}]] content=\"\"\ncontrol, stream: finish=tool_calls tool_calls=[[\"write\", {\"path\": \"notes.md\", \"content\": \"plain text\"}]] content=\"\"\nvalue holds the closer, whole: finish=tool_calls tool_calls=[[\"write\", {\"path\": \"notes.md\", \"content\": \"end of block: </\uff5cDSML\uff5c calls>\"}]] content=\"\"\nvalue holds the closer, stream: finish=tool_calls tool_calls=[[\"write\", {\"path\": \"notes.md\", \"content\": \"end of block: </\uff5cDSML\uff5c calls>\"}]] content=\"\"\ntwo calls, the first value holds the closer and <tool_call> markup, whole: finish=tool_calls tool_calls=[[\"write\", {\"path\": \"notes.md\", \"content\": \"</\uff5cDSML\uff5c calls><tool_call><function=write></function></tool_call>\"}], [\"write\", {\"path\": \"two.md\", \"content\": \"two\"}]] content=\"\"\ntwo calls, the first value holds the closer and <tool_call> markup, stream: finish=tool_calls tool_calls=[[\"write\", {\"path\": \"notes.md\", \"content\": \"</\uff5cDSML\uff5c calls><tool_call><function=write></function></tool_call>\"}], [\"write\", {\"path\": \"two.md\", \"content\": \"two\"}]] content=\"\"\nRESULT: fixed\n",
+    "probe": {
+     "head": {
+      "gpus": [
+       "0, NVIDIA GB10, 2177 MHz, 64, [N/A], [N/A], 95 %"
+      ],
+      "load": "load average: 5.44, 5.85, 4.03",
+      "container": "92 pids 3.188GiB / 121.7GiB",
+      "mem_available_mb": "27686"
+     }
+    }
+   },
+   {
+    "ok": true,
+    "role": "candidate",
+    "exit": 0,
+    "outcome": "passes",
+    "shows_problem": false,
+    "cmd": "bash tests/repro-issue-14.sh {api} {model} {logcmd}",
+    "output_tail": "control, whole: finish=tool_calls tool_calls=[[\"write\", {\"path\": \"notes.md\", \"content\": \"plain text\"}]] content=\"\"\ncontrol, stream: finish=tool_calls tool_calls=[[\"write\", {\"path\": \"notes.md\", \"content\": \"plain text\"}]] content=\"\"\nvalue holds the closer, whole: finish=tool_calls tool_calls=[[\"write\", {\"path\": \"notes.md\", \"content\": \"end of block: </\uff5cDSML\uff5c calls>\"}]] content=\"\"\nvalue holds the closer, stream: finish=tool_calls tool_calls=[[\"write\", {\"path\": \"notes.md\", \"content\": \"end of block: </\uff5cDSML\uff5c calls>\"}]] content=\"\"\ntwo calls, the first value holds the closer and <tool_call> markup, whole: finish=tool_calls tool_calls=[[\"write\", {\"path\": \"notes.md\", \"content\": \"</\uff5cDSML\uff5c calls><tool_call><function=write></function></tool_call>\"}], [\"write\", {\"path\": \"two.md\", \"content\": \"two\"}]] content=\"\"\ntwo calls, the first value holds the closer and <tool_call> markup, stream: finish=tool_calls tool_calls=[[\"write\", {\"path\": \"notes.md\", \"content\": \"</\uff5cDSML\uff5c calls><tool_call><function=write></function></tool_call>\"}], [\"write\", {\"path\": \"two.md\", \"content\": \"two\"}]] content=\"\"\nRESULT: fixed\n",
+    "probe": {
+     "head": {
+      "gpus": [
+       "0, NVIDIA GB10, 2177 MHz, 62, [N/A], [N/A], 94 %"
+      ],
+      "load": "load average: 7.01, 6.91, 5.08",
+      "container": "92 pids 3.173GiB / 121.7GiB",
+      "mem_available_mb": "27682"
+     }
+    }
+   }
+  ],
+  "base": [
+   {
+    "ok": true,
+    "role": "control",
+    "exit": 1,
+    "outcome": "fails",
+    "shows_problem": true,
+    "cmd": "bash tests/repro-issue-14.sh {api} {model} {logcmd}",
+    "output_tail": "control, whole: finish=tool_calls tool_calls=[[\"write\", {\"path\": \"notes.md\", \"content\": \"plain text\"}]] content=\"\"\ncontrol, stream: finish=tool_calls tool_calls=[[\"write\", {\"path\": \"notes.md\", \"content\": \"plain text\"}]] content=\"\"\nvalue holds the closer, whole: finish=stop tool_calls=[] content=\"<\uff5cDSML\uff5c calls>\\n<\uff5cDSML\uff5c invoke name=\\\"write\\\">\\n<\uff5cDSML\uff5c parameter name=\\\"path\\\" string=\\\"true\\\">notes.md</\uff5cDSML\uff5c parameter>\\n<\uff5cDSML\uff5c parameter name=\\\"content\\\" string=\\\"true\\\">end of block: </\uff5cDSML\uff5c calls></\uff5cDSML\uff5c parameter>\\n</\uff5cDSML\uff5c invoke>\\n</\uff5cDSML\uff5c calls>\"\n  FAIL value holds the closer, whole: expected one write call with the value intact and no DSML closer in content\nvalue holds the closer, stream: finish=stop tool_calls=[] content=\"</\uff5cDSML\uff5c parameter>\\n</\uff5cDSML\uff5c invoke>\\n</\uff5cDSML\uff5c calls>\"\n  FAIL value holds the closer, stream: expected one write call with the value intact and no DSML closer in content\ntwo calls, the first value holds the closer and <tool_call> markup, whole: finish=tool_calls tool_calls=[[\"write\", {}]] content=\"\"\n  FAIL two calls, the first value holds the closer and <tool_call> markup, whole: expected the two write calls with their values intact and no DSML closer in content\ntwo calls, the first value holds the closer and <tool_call> markup, stream: finish=tool_calls tool_calls=[[\"write\", {}]] content=\"</\uff5cDSML\uff5c parameter>\\n</\uff5cDSML\uff5c invoke>\\n<\uff5cDSML\uff5c invoke name=\\\"write\\\">\\n<\uff5cDSML\uff5c parameter name=\\\"path\\\" string=\\\"true\\\">two.md</\uff5cDSML\uff5c parameter>\\n<\uff5cDSML\uff5c parameter name=\\\"content\\\" string=\\\"true\\\">two</\uff5cDSML\uff5c parameter>\\n</\uff5cDSML\uff5c invoke>\\n</\uff5cDSML\uff5c calls>\"\n  FAIL two calls, the first value holds the closer and <tool_call> markup, stream: expected the two write calls with their values intact and no DSML closer in content\nRESULT: problem shows\n",
+    "probe": {
+     "head": {
+      "gpus": [
+       "0, NVIDIA GB10, 2177 MHz, 58, [N/A], [N/A], 94 %"
+      ],
+      "load": "load average: 6.81, 5.42, 3.35",
+      "container": "92 pids 3.168GiB / 121.7GiB",
+      "mem_available_mb": "27636"
+     }
+    }
+   },
+   {
+    "ok": true,
+    "role": "control",
+    "exit": 1,
+    "outcome": "fails",
+    "shows_problem": true,
+    "cmd": "bash tests/repro-issue-14.sh {api} {model} {logcmd}",
+    "output_tail": "control, whole: finish=tool_calls tool_calls=[[\"write\", {\"path\": \"notes.md\", \"content\": \"plain text\"}]] content=\"\"\ncontrol, stream: finish=tool_calls tool_calls=[[\"write\", {\"path\": \"notes.md\", \"content\": \"plain text\"}]] content=\"\"\nvalue holds the closer, whole: finish=stop tool_calls=[] content=\"<\uff5cDSML\uff5c calls>\\n<\uff5cDSML\uff5c invoke name=\\\"write\\\">\\n<\uff5cDSML\uff5c parameter name=\\\"path\\\" string=\\\"true\\\">notes.md</\uff5cDSML\uff5c parameter>\\n<\uff5cDSML\uff5c parameter name=\\\"content\\\" string=\\\"true\\\">end of block: </\uff5cDSML\uff5c calls></\uff5cDSML\uff5c parameter>\\n</\uff5cDSML\uff5c invoke>\\n</\uff5cDSML\uff5c calls>\"\n  FAIL value holds the closer, whole: expected one write call with the value intact and no DSML closer in content\nvalue holds the closer, stream: finish=stop tool_calls=[] content=\"</\uff5cDSML\uff5c parameter>\\n</\uff5cDSML\uff5c invoke>\\n</\uff5cDSML\uff5c calls>\"\n  FAIL value holds the closer, stream: expected one write call with the value intact and no DSML closer in content\ntwo calls, the first value holds the closer and <tool_call> markup, whole: finish=tool_calls tool_calls=[[\"write\", {}]] content=\"\"\n  FAIL two calls, the first value holds the closer and <tool_call> markup, whole: expected the two write calls with their values intact and no DSML closer in content\ntwo calls, the first value holds the closer and <tool_call> markup, stream: finish=tool_calls tool_calls=[[\"write\", {}]] content=\"</\uff5cDSML\uff5c parameter>\\n</\uff5cDSML\uff5c invoke>\\n<\uff5cDSML\uff5c invoke name=\\\"write\\\">\\n<\uff5cDSML\uff5c parameter name=\\\"path\\\" string=\\\"true\\\">two.md</\uff5cDSML\uff5c parameter>\\n<\uff5cDSML\uff5c parameter name=\\\"content\\\" string=\\\"true\\\">two</\uff5cDSML\uff5c parameter>\\n</\uff5cDSML\uff5c invoke>\\n</\uff5cDSML\uff5c calls>\"\n  FAIL two calls, the first value holds the closer and <tool_call> markup, stream: expected the two write calls with their values intact and no DSML closer in content\nRESULT: problem shows\n",
+    "probe": {
+     "head": {
+      "gpus": [
+       "0, NVIDIA GB10, 2177 MHz, 63, [N/A], [N/A], 95 %"
+      ],
+      "load": "load average: 6.07, 5.44, 3.46",
+      "container": "92 pids 3.169GiB / 121.7GiB",
+      "mem_available_mb": "27684"
+     }
+    }
+   },
+   {
+    "ok": true,
+    "role": "control",
+    "exit": 1,
+    "outcome": "fails",
+    "shows_problem": true,
+    "cmd": "bash tests/repro-issue-14.sh {api} {model} {logcmd}",
+    "output_tail": "control, whole: finish=tool_calls tool_calls=[[\"write\", {\"path\": \"notes.md\", \"content\": \"plain text\"}]] content=\"\"\ncontrol, stream: finish=tool_calls tool_calls=[[\"write\", {\"path\": \"notes.md\", \"content\": \"plain text\"}]] content=\"\"\nvalue holds the closer, whole: finish=stop tool_calls=[] content=\"<\uff5cDSML\uff5c calls>\\n<\uff5cDSML\uff5c invoke name=\\\"write\\\">\\n<\uff5cDSML\uff5c parameter name=\\\"path\\\" string=\\\"true\\\">notes.md</\uff5cDSML\uff5c parameter>\\n<\uff5cDSML\uff5c parameter name=\\\"content\\\" string=\\\"true\\\">end of block: </\uff5cDSML\uff5c calls></\uff5cDSML\uff5c parameter>\\n</\uff5cDSML\uff5c invoke>\\n</\uff5cDSML\uff5c calls>\"\n  FAIL value holds the closer, whole: expected one write call with the value intact and no DSML closer in content\nvalue holds the closer, stream: finish=stop tool_calls=[] content=\"</\uff5cDSML\uff5c parameter>\\n</\uff5cDSML\uff5c invoke>\\n</\uff5cDSML\uff5c calls>\"\n  FAIL value holds the closer, stream: expected one write call with the value intact and no DSML closer in content\ntwo calls, the first value holds the closer and <tool_call> markup, whole: finish=tool_calls tool_calls=[[\"write\", {}]] content=\"\"\n  FAIL two calls, the first value holds the closer and <tool_call> markup, whole: expected the two write calls with their values intact and no DSML closer in content\ntwo calls, the first value holds the closer and <tool_call> markup, stream: finish=tool_calls tool_calls=[[\"write\", {}]] content=\"</\uff5cDSML\uff5c parameter>\\n</\uff5cDSML\uff5c invoke>\\n<\uff5cDSML\uff5c invoke name=\\\"write\\\">\\n<\uff5cDSML\uff5c parameter name=\\\"path\\\" string=\\\"true\\\">two.md</\uff5cDSML\uff5c parameter>\\n<\uff5cDSML\uff5c parameter name=\\\"content\\\" string=\\\"true\\\">two</\uff5cDSML\uff5c parameter>\\n</\uff5cDSML\uff5c invoke>\\n</\uff5cDSML\uff5c calls>\"\n  FAIL two calls, the first value holds the closer and <tool_call> markup, stream: expected the two write calls with their values intact and no DSML closer in content\nRESULT: problem shows\n",
+    "probe": {
+     "head": {
+      "gpus": [
+       "0, NVIDIA GB10, 2177 MHz, 60, [N/A], [N/A], 94 %"
+      ],
+      "load": "load average: 6.23, 6.37, 4.52",
+      "container": "92 pids 3.188GiB / 121.7GiB",
+      "mem_available_mb": "27685"
+     }
+    }
+   },
+   {
+    "ok": true,
+    "role": "control",
+    "exit": 1,
+    "outcome": "fails",
+    "shows_problem": true,
+    "cmd": "bash tests/repro-issue-14.sh {api} {model} {logcmd}",
+    "output_tail": "control, whole: finish=tool_calls tool_calls=[[\"write\", {\"path\": \"notes.md\", \"content\": \"plain text\"}]] content=\"\"\ncontrol, stream: finish=tool_calls tool_calls=[[\"write\", {\"path\": \"notes.md\", \"content\": \"plain text\"}]] content=\"\"\nvalue holds the closer, whole: finish=stop tool_calls=[] content=\"<\uff5cDSML\uff5c calls>\\n<\uff5cDSML\uff5c invoke name=\\\"write\\\">\\n<\uff5cDSML\uff5c parameter name=\\\"path\\\" string=\\\"true\\\">notes.md</\uff5cDSML\uff5c parameter>\\n<\uff5cDSML\uff5c parameter name=\\\"content\\\" string=\\\"true\\\">end of block: </\uff5cDSML\uff5c calls></\uff5cDSML\uff5c parameter>\\n</\uff5cDSML\uff5c invoke>\\n</\uff5cDSML\uff5c calls>\"\n  FAIL value holds the closer, whole: expected one write call with the value intact and no DSML closer in content\nvalue holds the closer, stream: finish=stop tool_calls=[] content=\"</\uff5cDSML\uff5c parameter>\\n</\uff5cDSML\uff5c invoke>\\n</\uff5cDSML\uff5c calls>\"\n  FAIL value holds the closer, stream: expected one write call with the value intact and no DSML closer in content\ntwo calls, the first value holds the closer and <tool_call> markup, whole: finish=tool_calls tool_calls=[[\"write\", {}]] content=\"\"\n  FAIL two calls, the first value holds the closer and <tool_call> markup, whole: expected the two write calls with their values intact and no DSML closer in content\ntwo calls, the first value holds the closer and <tool_call> markup, stream: finish=tool_calls tool_calls=[[\"write\", {}]] content=\"</\uff5cDSML\uff5c parameter>\\n</\uff5cDSML\uff5c invoke>\\n<\uff5cDSML\uff5c invoke name=\\\"write\\\">\\n<\uff5cDSML\uff5c parameter name=\\\"path\\\" string=\\\"true\\\">two.md</\uff5cDSML\uff5c parameter>\\n<\uff5cDSML\uff5c parameter name=\\\"content\\\" string=\\\"true\\\">two</\uff5cDSML\uff5c parameter>\\n</\uff5cDSML\uff5c invoke>\\n</\uff5cDSML\uff5c calls>\"\n  FAIL two calls, the first value holds the closer and <tool_call> markup, stream: expected the two write calls with their values intact and no DSML closer in content\nRESULT: problem shows\n",
+    "probe": {
+     "head": {
+      "gpus": [
+       "0, NVIDIA GB10, 2177 MHz, 62, [N/A], [N/A], 0 %"
+      ],
+      "load": "load average: 5.58, 6.19, 4.55",
+      "container": "92 pids 3.188GiB / 121.7GiB",
+      "mem_available_mb": "27690"
+     }
+    }
+   }
+  ]
+ },
+ "startup": {
+  "pr": [
+   {
+    "ok": true,
+    "seconds_per_start": [
+     100.5,
+     100.1,
+     101.5
+    ]
+   }
+  ],
+  "base": [
+   {
+    "ok": true,
+    "seconds_per_start": [
+     101.3,
+     101.8
+    ]
+   }
+  ]
+ }
+}
