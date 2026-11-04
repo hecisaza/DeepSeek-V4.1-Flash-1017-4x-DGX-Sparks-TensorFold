@@ -1,5 +1,14 @@
 # Changelog
 
+- **2026-11-03** -- `0047` (Hector, [hecisaza](https://github.com/hecisaza)): a DSML tool call whose string value holds
+  the block's own closer (`</｜DSML｜ calls>`, as in a file about DSML) was cut at that closer: the call was dropped, and
+  a streamed reply showed only the block's remaining closers as content, with `finish_reason: stop`, the symptom
+  reported in [#14](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/14)
+  (ecohash-co). The block now closes at its last closer before the next opener, in the final parse and in the stream
+  filter, and a streamed DSML block stays hidden until the reply ends. Replies without that closer in a value parse as
+  before. `tests/repro-issue-14.sh` forces such a call (`guided_regex`, greedy) and checks the streamed and whole replies.
+  `TOP_P` is unchanged.
+
 - **2026-11-02** -- `tools/claims/`: three scripts that check a patch's promise against a running server, written by
   Hector Isaza ([hecisaza](https://github.com/hecisaza)) with the verify step of
   [inference-agent-kit](https://github.com/hecisaza/inference-agent-kit): `0042`'s JSON answers, `0043`'s orphan DSML
