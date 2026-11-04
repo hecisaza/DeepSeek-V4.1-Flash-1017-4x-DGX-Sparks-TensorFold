@@ -1,0 +1,198 @@
+<title>Aggregate: tokens per second over concurrent streams</title>
+<style>:root{--bg:#F1F4F6;--ink:#16202A;--muted:#5B6B7A;--line:#D6DDE3;--code:#E8EDF1;--accent:#0F766E}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#0F1519;--ink:#E6EBEF;--muted:#94A3B0;--line:#2A3540;--code:#121A21;--accent:#2DD4BF}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#0F1519;--ink:#E6EBEF;--muted:#94A3B0;--line:#2A3540;--code:#121A21;--accent:#2DD4BF}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 ui-sans-serif,system-ui,sans-serif;padding:0 20px;padding-block:28px 48px;max-width:1000px;margin:0 auto}
+h1{font-size:26px;margin:0 0 6px} h2{font-size:18px;margin:28px 0 8px} p{margin:6px 0} li{margin:3px 0}
+code{font-family:ui-monospace,Menlo,monospace;font-size:12.5px;background:var(--code);padding:1px 5px;border-radius:4px}
+table{border-collapse:collapse;width:100%;font-size:13.5px;margin:8px 0} td,th{padding:5px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top} th{color:var(--muted);font-weight:600}
+svg{max-width:100%;height:auto;border:1px solid var(--line);margin:8px 0} details{color:var(--muted);font-size:13px} strong{color:var(--accent)}</style>
+<div><h1>Evidence: pr vs base</h1>
+<table>
+<tr><th>target</th><th>role</th><th>image / artifact</th><th>model</th><th>settings that differ from the control</th></tr>
+<tr><td><code>pr</code></td><td>candidate</td><td><code>tensorfold-dsv41:pr-7d91c8d6</code> (c51bfb3e7446)</td><td><code>DeepSeek-V4.1-Flash-1017</code></td><td>-</td></tr>
+<tr><td><code>base</code></td><td>control</td><td><code>tensorfold-dsv41:base-57c739cb</code> (5a94966d9621)</td><td><code>DeepSeek-V4.1-Flash-1017</code></td><td>baseline</td></tr>
+</table>
+<p>Conditions: fabric ring; order: counterbalanced over 4 repetitions: A B, then B A; repetitions: 4; kit e3938b6.</p>
+<p>Restore: live restored (verified: API answers, running artifact is live&#x27;s).</p>
+<h2>perf</h2>
+<table>
+<tr><th>target</th><th>rep</th><th>decode tok/s, one stream</th><th>prefill tok/s, cold long prompt</th><th>aggregate tok/s, concurrent streams</th><th>errors</th></tr>
+<tr><td><code>pr</code></td><td>0</td><td><strong>57.4</strong> (57.3–59.6)</td><td><strong>3126.9</strong> (3100.2–3151.5; 12004 tokens)</td><td><strong>132.4</strong> (116.2–138.4; 4 streams)</td><td>-</td></tr>
+<tr><td><code>pr</code></td><td>1</td><td><strong>58.1</strong> (56.8–61.5)</td><td><strong>3139.1</strong> (3101.8–3147.4; 12004 tokens)</td><td><strong>135.5</strong> (132.9–142.5; 4 streams)</td><td>-</td></tr>
+<tr><td><code>pr</code></td><td>2</td><td><strong>58.0</strong> (56.2–63.1)</td><td><strong>3117.1</strong> (3098.6–3158.9; 12004 tokens)</td><td><strong>129.0</strong> (127.9–130.6; 4 streams)</td><td>-</td></tr>
+<tr><td><code>pr</code></td><td>3</td><td><strong>57.1</strong> (57.0–60.9)</td><td><strong>3130.9</strong> (3034.4–3136.7; 12004 tokens)</td><td><strong>135.4</strong> (130.2–140.2; 4 streams)</td><td>-</td></tr>
+<tr><td><code>base</code></td><td>0</td><td><strong>59.6</strong> (57.1–59.6)</td><td><strong>3170.6</strong> (3132.6–3171.5; 12004 tokens)</td><td><strong>131.8</strong> (128.0–133.4; 4 streams)</td><td>-</td></tr>
+<tr><td><code>base</code></td><td>1</td><td><strong>59.1</strong> (56.6–61.7)</td><td><strong>3125.2</strong> (3022.2–3154.8; 12004 tokens)</td><td><strong>135.0</strong> (124.6–144.5; 4 streams)</td><td>-</td></tr>
+<tr><td><code>base</code></td><td>2</td><td><strong>58.5</strong> (55.6–63.4)</td><td><strong>3118.7</strong> (2922.1–3143.2; 12004 tokens)</td><td><strong>127.7</strong> (120.5–129.8; 4 streams)</td><td>-</td></tr>
+<tr><td><code>base</code></td><td>3</td><td><strong>56.9</strong> (56.5–60.8)</td><td><strong>3127.7</strong> (2906.5–3128.5; 12004 tokens)</td><td><strong>134.3</strong> (134.0–139.6; 4 streams)</td><td>-</td></tr>
+</table>
+<p><code>pr</code> against <code>base</code>: decode -1.9%, prefill +0.1%, aggregate +0.6% (medians over repetitions; the verdict counts a difference only beyond the rounds&#x27; spread, at least ±3 %).</p>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 254" width="640" height="254" font-family="ui-sans-serif,system-ui" font-size="12">
+<rect width="640" height="254" fill="#ffffff"/>
+<text x="12" y="24" font-weight="600" fill="#16202A">Decode: tokens per second, one stream</text>
+<text x="12" y="49" fill="#5B6B7A">pr rep 0</text>
+<rect x="230" y="38" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="38" width="315.9" height="14" fill="#0F766E"/>
+<text x="628" y="49" text-anchor="end" fill="#16202A">57.4 tok/s</text>
+<text x="12" y="75" fill="#5B6B7A">pr rep 1</text>
+<rect x="230" y="64" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="64" width="319.7" height="14" fill="#0F766E"/>
+<text x="628" y="75" text-anchor="end" fill="#16202A">58.1 tok/s</text>
+<text x="12" y="101" fill="#5B6B7A">pr rep 2</text>
+<rect x="230" y="90" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="90" width="319.2" height="14" fill="#0F766E"/>
+<text x="628" y="101" text-anchor="end" fill="#16202A">58.0 tok/s</text>
+<text x="12" y="127" fill="#5B6B7A">pr rep 3</text>
+<rect x="230" y="116" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="116" width="314.2" height="14" fill="#0F766E"/>
+<text x="628" y="127" text-anchor="end" fill="#16202A">57.1 tok/s</text>
+<text x="12" y="153" fill="#5B6B7A">base rep 0</text>
+<rect x="230" y="142" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="142" width="328.0" height="14" fill="#8FB3AE"/>
+<text x="628" y="153" text-anchor="end" fill="#16202A">59.6 tok/s</text>
+<text x="12" y="179" fill="#5B6B7A">base rep 1</text>
+<rect x="230" y="168" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="168" width="325.2" height="14" fill="#8FB3AE"/>
+<text x="628" y="179" text-anchor="end" fill="#16202A">59.1 tok/s</text>
+<text x="12" y="205" fill="#5B6B7A">base rep 2</text>
+<rect x="230" y="194" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="194" width="321.9" height="14" fill="#8FB3AE"/>
+<text x="628" y="205" text-anchor="end" fill="#16202A">58.5 tok/s</text>
+<text x="12" y="231" fill="#5B6B7A">base rep 3</text>
+<rect x="230" y="220" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="220" width="313.1" height="14" fill="#8FB3AE"/>
+<text x="628" y="231" text-anchor="end" fill="#16202A">56.9 tok/s</text>
+</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 254" width="640" height="254" font-family="ui-sans-serif,system-ui" font-size="12">
+<rect width="640" height="254" fill="#ffffff"/>
+<text x="12" y="24" font-weight="600" fill="#16202A">Prefill: prompt tokens per second, cold long prompt</text>
+<text x="12" y="49" fill="#5B6B7A">pr rep 0</text>
+<rect x="230" y="38" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="38" width="323.5" height="14" fill="#0F766E"/>
+<text x="628" y="49" text-anchor="end" fill="#16202A">3126.9 tok/s</text>
+<text x="12" y="75" fill="#5B6B7A">pr rep 1</text>
+<rect x="230" y="64" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="64" width="324.7" height="14" fill="#0F766E"/>
+<text x="628" y="75" text-anchor="end" fill="#16202A">3139.1 tok/s</text>
+<text x="12" y="101" fill="#5B6B7A">pr rep 2</text>
+<rect x="230" y="90" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="90" width="322.5" height="14" fill="#0F766E"/>
+<text x="628" y="101" text-anchor="end" fill="#16202A">3117.1 tok/s</text>
+<text x="12" y="127" fill="#5B6B7A">pr rep 3</text>
+<rect x="230" y="116" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="116" width="323.9" height="14" fill="#0F766E"/>
+<text x="628" y="127" text-anchor="end" fill="#16202A">3130.9 tok/s</text>
+<text x="12" y="153" fill="#5B6B7A">base rep 0</text>
+<rect x="230" y="142" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="142" width="328.0" height="14" fill="#8FB3AE"/>
+<text x="628" y="153" text-anchor="end" fill="#16202A">3170.6 tok/s</text>
+<text x="12" y="179" fill="#5B6B7A">base rep 1</text>
+<rect x="230" y="168" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="168" width="323.3" height="14" fill="#8FB3AE"/>
+<text x="628" y="179" text-anchor="end" fill="#16202A">3125.2 tok/s</text>
+<text x="12" y="205" fill="#5B6B7A">base rep 2</text>
+<rect x="230" y="194" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="194" width="322.6" height="14" fill="#8FB3AE"/>
+<text x="628" y="205" text-anchor="end" fill="#16202A">3118.7 tok/s</text>
+<text x="12" y="231" fill="#5B6B7A">base rep 3</text>
+<rect x="230" y="220" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="220" width="323.6" height="14" fill="#8FB3AE"/>
+<text x="628" y="231" text-anchor="end" fill="#16202A">3127.7 tok/s</text>
+</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 254" width="640" height="254" font-family="ui-sans-serif,system-ui" font-size="12">
+<rect width="640" height="254" fill="#ffffff"/>
+<text x="12" y="24" font-weight="600" fill="#16202A">Aggregate: tokens per second over concurrent streams</text>
+<text x="12" y="49" fill="#5B6B7A">pr rep 0</text>
+<rect x="230" y="38" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="38" width="320.5" height="14" fill="#0F766E"/>
+<text x="628" y="49" text-anchor="end" fill="#16202A">132.4 tok/s</text>
+<text x="12" y="75" fill="#5B6B7A">pr rep 1</text>
+<rect x="230" y="64" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="64" width="328.0" height="14" fill="#0F766E"/>
+<text x="628" y="75" text-anchor="end" fill="#16202A">135.5 tok/s</text>
+<text x="12" y="101" fill="#5B6B7A">pr rep 2</text>
+<rect x="230" y="90" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="90" width="312.3" height="14" fill="#0F766E"/>
+<text x="628" y="101" text-anchor="end" fill="#16202A">129.0 tok/s</text>
+<text x="12" y="127" fill="#5B6B7A">pr rep 3</text>
+<rect x="230" y="116" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="116" width="327.8" height="14" fill="#0F766E"/>
+<text x="628" y="127" text-anchor="end" fill="#16202A">135.4 tok/s</text>
+<text x="12" y="153" fill="#5B6B7A">base rep 0</text>
+<rect x="230" y="142" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="142" width="319.0" height="14" fill="#8FB3AE"/>
+<text x="628" y="153" text-anchor="end" fill="#16202A">131.8 tok/s</text>
+<text x="12" y="179" fill="#5B6B7A">base rep 1</text>
+<rect x="230" y="168" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="168" width="326.8" height="14" fill="#8FB3AE"/>
+<text x="628" y="179" text-anchor="end" fill="#16202A">135.0 tok/s</text>
+<text x="12" y="205" fill="#5B6B7A">base rep 2</text>
+<rect x="230" y="194" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="194" width="309.1" height="14" fill="#8FB3AE"/>
+<text x="628" y="205" text-anchor="end" fill="#16202A">127.7 tok/s</text>
+<text x="12" y="231" fill="#5B6B7A">base rep 3</text>
+<rect x="230" y="220" width="328" height="14" fill="#E8EDF1"/>
+<rect x="230" y="220" width="325.1" height="14" fill="#8FB3AE"/>
+<text x="628" y="231" text-anchor="end" fill="#16202A">134.3 tok/s</text>
+</svg>
+<details><summary>machine state after the suite</summary>
+<li><code>pr</code> rep 0: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2177 MHz, 61, [N/A], [N/A], 0 %&quot;], &quot;load&quot;: &quot;load average: 6.16, 4.21, 4.58&quot;, &quot;container&quot;: &quot;92 pids 3.164GiB / 121.7GiB&quot;, &quot;mem_available_mb&quot;: &quot;27089&quot;}}</code></li>
+<li><code>pr</code> rep 1: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2171 MHz, 63, [N/A], [N/A], 96 %&quot;], &quot;load&quot;: &quot;load average: 7.09, 6.25, 5.39&quot;, &quot;container&quot;: &quot;92 pids 3.152GiB / 121.7GiB&quot;, &quot;mem_available_mb&quot;: &quot;27860&quot;}}</code></li>
+<li><code>pr</code> rep 2: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2171 MHz, 65, [N/A], [N/A], 96 %&quot;], &quot;load&quot;: &quot;load average: 6.02, 6.08, 5.37&quot;, &quot;container&quot;: &quot;92 pids 3.206GiB / 121.7GiB&quot;, &quot;mem_available_mb&quot;: &quot;27705&quot;}}</code></li>
+<li><code>pr</code> rep 3: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2177 MHz, 61, [N/A], [N/A], 96 %&quot;], &quot;load&quot;: &quot;load average: 7.23, 7.01, 6.00&quot;, &quot;container&quot;: &quot;92 pids 3.111GiB / 121.7GiB&quot;, &quot;mem_available_mb&quot;: &quot;27884&quot;}}</code></li>
+<li><code>base</code> rep 0: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2177 MHz, 60, [N/A], [N/A], 0 %&quot;], &quot;load&quot;: &quot;load average: 6.75, 5.49, 5.02&quot;, &quot;container&quot;: &quot;92 pids 3.129GiB / 121.7GiB&quot;, &quot;mem_available_mb&quot;: &quot;27905&quot;}}</code></li>
+<li><code>base</code> rep 1: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2177 MHz, 63, [N/A], [N/A], 96 %&quot;], &quot;load&quot;: &quot;load average: 5.78, 5.39, 5.01&quot;, &quot;container&quot;: &quot;92 pids 3.199GiB / 121.7GiB&quot;, &quot;mem_available_mb&quot;: &quot;27799&quot;}}</code></li>
+<li><code>base</code> rep 2: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2171 MHz, 61, [N/A], [N/A], 34 %&quot;], &quot;load&quot;: &quot;load average: 7.03, 6.68, 5.71&quot;, &quot;container&quot;: &quot;92 pids 3.127GiB / 121.7GiB&quot;, &quot;mem_available_mb&quot;: &quot;27787&quot;}}</code></li>
+<li><code>base</code> rep 3: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2177 MHz, 63, [N/A], [N/A], 0 %&quot;], &quot;load&quot;: &quot;load average: 6.08, 6.45, 5.68&quot;, &quot;container&quot;: &quot;92 pids 3.182GiB / 121.7GiB&quot;, &quot;mem_available_mb&quot;: &quot;27802&quot;}}</code></li>
+</details>
+<h2>startup</h2>
+<p><code>pr</code>: 101.0 s, 100.5 s, 100.5 s from the switch to the API answering (3 start(s))</p>
+<p><code>base</code>: 100.7 s, 100.5 s from the switch to the API answering (2 start(s))</p>
+<h2>repro</h2>
+<table>
+<tr><th>target</th><th>role</th><th>rep</th><th>exit</th><th>outcome</th><th>expected</th><th>as expected</th></tr>
+<tr><td><code>pr</code></td><td>candidate</td><td>0</td><td>0</td><td>passes</td><td>passes</td><td>✓</td></tr>
+<tr><td><code>pr</code></td><td>candidate</td><td>1</td><td>0</td><td>passes</td><td>passes</td><td>✓</td></tr>
+<tr><td><code>pr</code></td><td>candidate</td><td>2</td><td>0</td><td>passes</td><td>passes</td><td>✓</td></tr>
+<tr><td><code>pr</code></td><td>candidate</td><td>3</td><td>0</td><td>passes</td><td>passes</td><td>✓</td></tr>
+<tr><td><code>base</code></td><td>control</td><td>0</td><td>1</td><td>fails</td><td>fails</td><td>✓</td></tr>
+<tr><td><code>base</code></td><td>control</td><td>1</td><td>1</td><td>fails</td><td>fails</td><td>✓</td></tr>
+<tr><td><code>base</code></td><td>control</td><td>2</td><td>1</td><td>fails</td><td>fails</td><td>✓</td></tr>
+<tr><td><code>base</code></td><td>control</td><td>3</td><td>1</td><td>fails</td><td>fails</td><td>✓</td></tr>
+</table>
+<p><strong>Reproduced on the control and gone on the candidate</strong> (every repetition).</p>
+<p>Command: <code>bash tests/repro-issue-14.sh {api} {model} {logcmd}</code></p>
+<details><summary>output of the script (tail)</summary>
+<li><code>pr</code> rep 0: <code>｜DSML｜ calls&gt;&quot;}]] content=&quot;&quot; two calls, the first value holds the closer and &lt;tool_call&gt; markup, whole: finish=tool_calls tool_calls=[[&quot;write&quot;, {&quot;path&quot;: &quot;notes.md&quot;, &quot;content&quot;: &quot;&lt;/｜DSML｜ calls&gt;&lt;tool_call&gt;&lt;function=write&gt;&lt;/function&gt;&lt;/tool_call&gt;&quot;}], [&quot;write&quot;, {&quot;path&quot;: &quot;two.md&quot;, &quot;content&quot;: &quot;two&quot;}]] content=&quot;&quot; two calls, the first value holds the closer and &lt;tool_call&gt; markup, stream: finish=tool_calls tool_calls=[[&quot;write&quot;, {&quot;path&quot;: &quot;notes.md&quot;, &quot;content&quot;: &quot;&lt;/｜DSML｜ calls&gt;&lt;tool_call&gt;&lt;function=write&gt;&lt;/function&gt;&lt;/tool_call&gt;&quot;}], [&quot;write&quot;, {&quot;path&quot;: &quot;two.md&quot;, &quot;content&quot;: &quot;two&quot;}]] content=&quot;&quot; RESULT: fixed </code></li>
+<li><code>pr</code> rep 1: <code>｜DSML｜ calls&gt;&quot;}]] content=&quot;&quot; two calls, the first value holds the closer and &lt;tool_call&gt; markup, whole: finish=tool_calls tool_calls=[[&quot;write&quot;, {&quot;path&quot;: &quot;notes.md&quot;, &quot;content&quot;: &quot;&lt;/｜DSML｜ calls&gt;&lt;tool_call&gt;&lt;function=write&gt;&lt;/function&gt;&lt;/tool_call&gt;&quot;}], [&quot;write&quot;, {&quot;path&quot;: &quot;two.md&quot;, &quot;content&quot;: &quot;two&quot;}]] content=&quot;&quot; two calls, the first value holds the closer and &lt;tool_call&gt; markup, stream: finish=tool_calls tool_calls=[[&quot;write&quot;, {&quot;path&quot;: &quot;notes.md&quot;, &quot;content&quot;: &quot;&lt;/｜DSML｜ calls&gt;&lt;tool_call&gt;&lt;function=write&gt;&lt;/function&gt;&lt;/tool_call&gt;&quot;}], [&quot;write&quot;, {&quot;path&quot;: &quot;two.md&quot;, &quot;content&quot;: &quot;two&quot;}]] content=&quot;&quot; RESULT: fixed </code></li>
+<li><code>pr</code> rep 2: <code>｜DSML｜ calls&gt;&quot;}]] content=&quot;&quot; two calls, the first value holds the closer and &lt;tool_call&gt; markup, whole: finish=tool_calls tool_calls=[[&quot;write&quot;, {&quot;path&quot;: &quot;notes.md&quot;, &quot;content&quot;: &quot;&lt;/｜DSML｜ calls&gt;&lt;tool_call&gt;&lt;function=write&gt;&lt;/function&gt;&lt;/tool_call&gt;&quot;}], [&quot;write&quot;, {&quot;path&quot;: &quot;two.md&quot;, &quot;content&quot;: &quot;two&quot;}]] content=&quot;&quot; two calls, the first value holds the closer and &lt;tool_call&gt; markup, stream: finish=tool_calls tool_calls=[[&quot;write&quot;, {&quot;path&quot;: &quot;notes.md&quot;, &quot;content&quot;: &quot;&lt;/｜DSML｜ calls&gt;&lt;tool_call&gt;&lt;function=write&gt;&lt;/function&gt;&lt;/tool_call&gt;&quot;}], [&quot;write&quot;, {&quot;path&quot;: &quot;two.md&quot;, &quot;content&quot;: &quot;two&quot;}]] content=&quot;&quot; RESULT: fixed </code></li>
+<li><code>pr</code> rep 3: <code>｜DSML｜ calls&gt;&quot;}]] content=&quot;&quot; two calls, the first value holds the closer and &lt;tool_call&gt; markup, whole: finish=tool_calls tool_calls=[[&quot;write&quot;, {&quot;path&quot;: &quot;notes.md&quot;, &quot;content&quot;: &quot;&lt;/｜DSML｜ calls&gt;&lt;tool_call&gt;&lt;function=write&gt;&lt;/function&gt;&lt;/tool_call&gt;&quot;}], [&quot;write&quot;, {&quot;path&quot;: &quot;two.md&quot;, &quot;content&quot;: &quot;two&quot;}]] content=&quot;&quot; two calls, the first value holds the closer and &lt;tool_call&gt; markup, stream: finish=tool_calls tool_calls=[[&quot;write&quot;, {&quot;path&quot;: &quot;notes.md&quot;, &quot;content&quot;: &quot;&lt;/｜DSML｜ calls&gt;&lt;tool_call&gt;&lt;function=write&gt;&lt;/function&gt;&lt;/tool_call&gt;&quot;}], [&quot;write&quot;, {&quot;path&quot;: &quot;two.md&quot;, &quot;content&quot;: &quot;two&quot;}]] content=&quot;&quot; RESULT: fixed </code></li>
+<li><code>base</code> rep 0: <code>o DSML closer in content two calls, the first value holds the closer and &lt;tool_call&gt; markup, stream: finish=tool_calls tool_calls=[[&quot;write&quot;, {}]] content=&quot;&lt;/｜DSML｜ parameter&gt;\n&lt;/｜DSML｜ invoke&gt;\n&lt;｜DSML｜ invoke name=\&quot;write\&quot;&gt;\n&lt;｜DSML｜ parameter name=\&quot;path\&quot; string=\&quot;true\&quot;&gt;two.md&lt;/｜DSML｜ parameter&gt;\n&lt;｜DSML｜ parameter name=\&quot;content\&quot; string=\&quot;true\&quot;&gt;two&lt;/｜DSML｜ parameter&gt;\n&lt;/｜DSML｜ invoke&gt;\n&lt;/｜DSML｜ calls&gt;&quot;   FAIL two calls, the first value holds the closer and &lt;tool_call&gt; markup, stream: expected the two write calls with their values intact and no DSML closer in content RESULT: problem shows </code></li>
+<li><code>base</code> rep 1: <code>o DSML closer in content two calls, the first value holds the closer and &lt;tool_call&gt; markup, stream: finish=tool_calls tool_calls=[[&quot;write&quot;, {}]] content=&quot;&lt;/｜DSML｜ parameter&gt;\n&lt;/｜DSML｜ invoke&gt;\n&lt;｜DSML｜ invoke name=\&quot;write\&quot;&gt;\n&lt;｜DSML｜ parameter name=\&quot;path\&quot; string=\&quot;true\&quot;&gt;two.md&lt;/｜DSML｜ parameter&gt;\n&lt;｜DSML｜ parameter name=\&quot;content\&quot; string=\&quot;true\&quot;&gt;two&lt;/｜DSML｜ parameter&gt;\n&lt;/｜DSML｜ invoke&gt;\n&lt;/｜DSML｜ calls&gt;&quot;   FAIL two calls, the first value holds the closer and &lt;tool_call&gt; markup, stream: expected the two write calls with their values intact and no DSML closer in content RESULT: problem shows </code></li>
+<li><code>base</code> rep 2: <code>o DSML closer in content two calls, the first value holds the closer and &lt;tool_call&gt; markup, stream: finish=tool_calls tool_calls=[[&quot;write&quot;, {}]] content=&quot;&lt;/｜DSML｜ parameter&gt;\n&lt;/｜DSML｜ invoke&gt;\n&lt;｜DSML｜ invoke name=\&quot;write\&quot;&gt;\n&lt;｜DSML｜ parameter name=\&quot;path\&quot; string=\&quot;true\&quot;&gt;two.md&lt;/｜DSML｜ parameter&gt;\n&lt;｜DSML｜ parameter name=\&quot;content\&quot; string=\&quot;true\&quot;&gt;two&lt;/｜DSML｜ parameter&gt;\n&lt;/｜DSML｜ invoke&gt;\n&lt;/｜DSML｜ calls&gt;&quot;   FAIL two calls, the first value holds the closer and &lt;tool_call&gt; markup, stream: expected the two write calls with their values intact and no DSML closer in content RESULT: problem shows </code></li>
+<li><code>base</code> rep 3: <code>o DSML closer in content two calls, the first value holds the closer and &lt;tool_call&gt; markup, stream: finish=tool_calls tool_calls=[[&quot;write&quot;, {}]] content=&quot;&lt;/｜DSML｜ parameter&gt;\n&lt;/｜DSML｜ invoke&gt;\n&lt;｜DSML｜ invoke name=\&quot;write\&quot;&gt;\n&lt;｜DSML｜ parameter name=\&quot;path\&quot; string=\&quot;true\&quot;&gt;two.md&lt;/｜DSML｜ parameter&gt;\n&lt;｜DSML｜ parameter name=\&quot;content\&quot; string=\&quot;true\&quot;&gt;two&lt;/｜DSML｜ parameter&gt;\n&lt;/｜DSML｜ invoke&gt;\n&lt;/｜DSML｜ calls&gt;&quot;   FAIL two calls, the first value holds the closer and &lt;tool_call&gt; markup, stream: expected the two write calls with their values intact and no DSML closer in content RESULT: problem shows </code></li>
+</details>
+<details><summary>machine state after the suite</summary>
+<li><code>pr</code> rep 0: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2171 MHz, 60, [N/A], [N/A], 94 %&quot;], &quot;load&quot;: &quot;load average: 5.51, 4.13, 4.56&quot;, &quot;container&quot;: &quot;92 pids 3.218GiB / 121.7GiB&quot;, &quot;mem_available_mb&quot;: &quot;27057&quot;}}</code></li>
+<li><code>pr</code> rep 1: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2177 MHz, 63, [N/A], [N/A], 95 %&quot;], &quot;load&quot;: &quot;load average: 6.54, 6.16, 5.37&quot;, &quot;container&quot;: &quot;92 pids 3.205GiB / 121.7GiB&quot;, &quot;mem_available_mb&quot;: &quot;27709&quot;}}</code></li>
+<li><code>pr</code> rep 2: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2177 MHz, 63, [N/A], [N/A], 0 %&quot;], &quot;load&quot;: &quot;load average: 5.78, 6.02, 5.36&quot;, &quot;container&quot;: &quot;92 pids 3.205GiB / 121.7GiB&quot;, &quot;mem_available_mb&quot;: &quot;27677&quot;}}</code></li>
+<li><code>pr</code> rep 3: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2177 MHz, 61, [N/A], [N/A], 0 %&quot;], &quot;load&quot;: &quot;load average: 7.05, 6.97, 6.00&quot;, &quot;container&quot;: &quot;92 pids 3.165GiB / 121.7GiB&quot;, &quot;mem_available_mb&quot;: &quot;27778&quot;}}</code></li>
+<li><code>base</code> rep 0: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2177 MHz, 60, [N/A], [N/A], 95 %&quot;], &quot;load&quot;: &quot;load average: 6.26, 5.42, 5.00&quot;, &quot;container&quot;: &quot;92 pids 3.183GiB / 121.7GiB&quot;, &quot;mem_available_mb&quot;: &quot;27773&quot;}}</code></li>
+<li><code>base</code> rep 1: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2171 MHz, 65, [N/A], [N/A], 94 %&quot;], &quot;load&quot;: &quot;load average: 5.50, 5.34, 5.00&quot;, &quot;container&quot;: &quot;92 pids 3.198GiB / 121.7GiB&quot;, &quot;mem_available_mb&quot;: &quot;27729&quot;}}</code></li>
+<li><code>base</code> rep 2: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2171 MHz, 61, [N/A], [N/A], 95 %&quot;], &quot;load&quot;: &quot;load average: 6.79, 6.64, 5.70&quot;, &quot;container&quot;: &quot;92 pids 3.181GiB / 121.7GiB&quot;, &quot;mem_available_mb&quot;: &quot;27725&quot;}}</code></li>
+<li><code>base</code> rep 3: <code>{&quot;head&quot;: {&quot;gpus&quot;: [&quot;0, NVIDIA GB10, 2171 MHz, 65, [N/A], [N/A], 94 %&quot;], &quot;load&quot;: &quot;load average: 5.63, 6.34, 5.65&quot;, &quot;container&quot;: &quot;92 pids 3.182GiB / 121.7GiB&quot;, &quot;mem_available_mb&quot;: &quot;27756&quot;}}</code></li>
+</details>
+<h2>the pull request&#x27;s own tests</h2>
+<p>The pull request adds or changes no test file under <code>tests/</code>.</p>
+<h2>What this run does not show</h2>
+<li>basic answers, greedy repeat equality, streaming and JSON mode (<code>smoke</code> did not run)</li>
+<li>reply equality at chunk ends and prefix-cache cases (<code>boundary</code> did not run)</li>
+<li>a short request&#x27;s first-token time behind a cold long prompt (<code>cutin</code> did not run)</li>
+<li>errors, canary mismatches and resource growth over time with client aborts (<code>soak</code> did not run)</li>
+<li>throughput and first-token latency at 1 to 16 streams, serial-vs-batched determinism, host memory and descriptors after a drain (<code>concurrency</code> did not run)</li>
+<li>one process under mixed load for hours: throughput probes every few minutes, a canary reply, host memory and descriptors over the run (<code>endurance</code> did not run)</li>
+<li>a clean pair exit and recovery after an injected read fault (<code>fault</code> did not run)</li>
+<li>an external benchmark against a control (The Grill or similar) (<code>bench</code> did not run)</li>
+<li>&lt;!-- add: paths only checked by reading, faults not injected, configurations not run --&gt;</li>
+<p><em>Generated by inference-agent-kit <code>report.py</code> from <code>20261104T071712/results.json</code>.</em></p></div>

@@ -1,0 +1,22 @@
+{
+ "class": "NOT READY",
+ "label": "evidence:blocked",
+ "historical": false,
+ "reasons": [
+  "slower than the control over counterbalanced repetitions: decode -2% (band \u00b11%)"
+ ],
+ "facts": [
+  "suites on `pr`: perf \u2713 \u00b7 startup \u2713",
+  "repro script: confirmed (4 repetition(s))",
+  "performance against the control (calibration of 2026-11-02): decode -2% (\u00b11%, slower) \u00b7 prefill +0% (\u00b11%) \u00b7 aggregate +0% (\u00b13%) \u00b7 startup +0% (\u00b110%)",
+  "the PR's own tests: no tests",
+  "second opinion: EVIDENCE SUPPORTS THE CLAIM; claim test: SOUND; author tests: NONE",
+  "patch numbers: no collision with another open pull request",
+  "restore: live restored (verified: API answers, running artifact is live's)",
+  "run manifest: PR open at execution; candidate merged onto the current base; head a12c134d, base 57c739cb; engine switches: lab"
+ ],
+ "verified": [
+  "the repro script fails on the base and passes on the candidate, and the second opinion found its oracle sound"
+ ],
+ "not_verified": []
+}
