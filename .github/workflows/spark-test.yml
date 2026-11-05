@@ -3,8 +3,8 @@
 #   - the label `test` on a PR of this repository (authors in the allowlist below)
 #   - "Run workflow" with a PR number here, or the URL of a PR anywhere (for example the upstream recipe)
 #   - called by spark-issue after its agent opened a PR
-# A PR that carries tests/repro-issue-N.sh also gets the repro suite: the script must show the problem on the base and
-# not on the PR. Evidence is committed to the PR branch and posted as a comment when the PR lives here; for a PR elsewhere
+# A PR that adds or changes tests/repro-issue-N.sh also gets the repro suite: the script must show the problem on the base
+# and not on the PR. Evidence is committed to the PR branch and posted as a comment when the PR lives here; for a PR elsewhere
 # it goes to an evidence/ branch here and to the run summary, and nothing is posted on the other repository.
 name: spark-test
 
@@ -163,7 +163,9 @@ jobs:
         run: |
           # a PR that fixes an issue carries its reproduction script; otherwise a claim test written by the verify step may
           # exist under claims/ on this repository's main. Either runs against both builds as the repro suite.
-          R=$(ls tests/repro-issue-*.sh 2>/dev/null | head -1); OPTS=(); S="$SUITES"
+          # only a reproduction script this PR adds or changes: one already on the base (a fix merged earlier) passes on
+          # both builds and would read as a failed control
+          R=$(git diff --name-only --diff-filter=AM "$BASE_SHA" "$CAND_SHA" -- 'tests/repro-issue-*.sh' 2>/dev/null | head -1); OPTS=(); S="$SUITES"
           SLUG=$(tr / - <<<"$PR_REPO")
           if [ -z "$R" ] && gh api "repos/$THIS_REPO/contents/claims/$SLUG-pr-$PR.sh?ref=main" -H "Accept: application/vnd.github.raw" > claim.sh 2>/dev/null && [ -s claim.sh ]; then
             echo "claim test found on main: claims/$SLUG-pr-$PR.sh"; R=claim.sh
@@ -171,7 +173,9 @@ jobs:
           echo "claim=$([ "$R" = claim.sh ] && echo yes || echo none)" >> "$GITHUB_OUTPUT"
           if [ -n "$R" ]; then OPTS=(--opt "repro_cmd=bash $R {api} {model} {logcmd}"); case ",$S," in *,repro,*) ;; *) S="$S,repro";; esac; fi
           echo "SUITES_RUN=$S" >> "$GITHUB_ENV"
-          "$KIT/scripts/pairtest" run --lab lab.run.yaml --target pr --compare base --suite "$S" --runs runs --opt "reps=$REPS" "${OPTS[@]}"; rc=$?
+          # the step's shell stops on the first failing command: keep pairtest's status so the run is still recorded,
+          # the defaults run still happens and the evidence steps still see RUN
+          rc=0; "$KIT/scripts/pairtest" run --lab lab.run.yaml --target pr --compare base --suite "$S" --runs runs --opt "reps=$REPS" "${OPTS[@]}" || rc=$?
           RUN=$(ls -t runs | head -1); echo "RUN=$RUN" >> "$GITHUB_ENV"; cp run-manifest.json "runs/$RUN/run-manifest.json"
           [ -z "$R" ] || cp "$R" "runs/$RUN/executed-script.sh"
           if [ "$DEFAULTS_RUN" = 1 ]; then
