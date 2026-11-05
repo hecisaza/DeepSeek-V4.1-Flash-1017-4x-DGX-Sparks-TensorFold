@@ -1,0 +1,19 @@
+{
+ "files": [
+  "tests/test_start_smoke.py",
+  "tests/test_start_urls.py"
+ ],
+ "candidate": {
+  "exit": 0,
+  "outcome": "passes",
+  "summary": ".......................................................... [100%] 58 passed, 14 subtests passed in 25.66s",
+  "output_tail": ".......................................................... [100%]\n58 passed, 14 subtests passed in 25.66s\n"
+ },
+ "control": {
+  "exit": 1,
+  "outcome": "fails",
+  "summary": "Restart  ./start.sh restart     Stop     ./stop.sh 68 failed, 4 passed in 29.88s",
+  "output_tail": "iles and kit on spark1; NFS volumes on the workers\n[start.sh] Ready: tensorfold-dsv41:native-6b3711e64978, deepseek-ai/DeepSeek-V4.1-Flash-1017 @ 1bae0e10, its weight files and kit\n[2/5] Checks: links, previous server, port, memory\n[start.sh] Fabric: mesh; rendezvous [address]:29760; 2D nodes by NCCL rank: 0,1,2,3\n[start.sh]   rank 0 (this node): RoCE fake (GID 0)\n[start.sh]   rank 1 (w1): RoCE fake (GID 0), NFS from [address]\n[start.sh]   rank 2 (w2): RoCE fake (GID 0), NFS from [address]\n[start.sh]   rank 3 (w3): RoCE fake (GID 0), NFS from [address]\n[3/5] Launch: container dsv41-1017-tf, ranks 3 to 1 on the workers, then rank 0 here\n[start.sh] Rank 3 on w3: tf-dsv41-lanes /hf/hub/models--deepseek-ai--DeepSeek-V4.1-Flash-1017/snapshots/1bae0e1088993b9b82de08f59de5be5a34e42170 /hf/tensorfold-dsv41/1bae0e10/rank-cache 3 4 [address] 29760 /hf/tensorfold-dsv41/kit-6033ea48/kit --pool 2097152 --context 1048576 --engram /engram --token-map /hf/tensorfold-dsv41/1bae0e10/dsv41_token_map.json --drafts 1 --round-rows 48 --streams 16 --graphs 1 --side 1 --prefetch 1 --aio 1 --rdma fake\n[start.sh] Rank 2 on w2: tf-dsv41-lanes /hf/hub/models--deepseek-ai--DeepSeek-V4.1-Flash-1017/snapshots/1bae0e1088993b9b82de08f59de5be5a34e42170 /hf/tensorfold-dsv41/1bae0e10/rank-cache 2 4 [address] 29760 /hf/tensorfold-dsv41/kit-6033ea48/kit --pool 2097152 --context 1048576 --engram /engram --token-map /hf/tensorfold-dsv41/1bae0e10/dsv41_token_map.json --drafts 1 --round-rows 48 --streams 16 --graphs 1 --side 1 --prefetch 1 --aio 1 --rdma fake\n[start.sh] Rank 1 on w1: tf-dsv41-lanes /hf/hub/models--deepseek-ai--DeepSeek-V4.1-Flash-1017/snapshots/1bae0e1088993b9b82de08f59de5be5a34e42170 /hf/tensorfold-dsv41/1bae0e10/rank-cache 1 4 [address] 29760 /hf/tensorfold-dsv41/kit-6033ea48/kit --pool 2097152 --context 1048576 --engram /engram --token-map /hf/tensorfold-dsv41/1bae0e10/dsv41_token_map.json --drafts 1 --round-rows 48 --streams 16 --graphs 1 --side 1 --prefetch 1 --aio 1 --rdma fake\n[start.sh] Rank 0 here: tensorfold-native serve /hf/tensorfold-dsv41/1bae0e10/model --backend cuda --host localhost --port 34969 --name DeepSeek-V4.1-Flash-1017 --context 1048576 --parallel 16 --max-tokens 32768 --temperature 1.0 --top-p 1.0 --top-k 20 --thinking --reasoning-effort max\n[4/5] Loading: ~75 GiB of weights on each Spark over NFS, then the caches (a few minutes)\n  \u2502 a log line\n[start.sh] Server answered after 0s\n[5/5] Smoke test: one chat completion through all 4 ranks\n[start.sh] OK: 'OK', 1 tokens\n\n  \u2714 DeepSeek-V4.1-Flash-1017 is now LIVE! on port 34969\n\n    API      http://localhost:34969/v1   (model: DeepSeek-V4.1-Flash-1017)\n    Window   1048576 tokens \u00b7 16 at once \u00b7 native FP8 / MXFP4 \u00b7 drafts on \u00b7 images on\n    Logs     docker logs -f dsv41-1017-tf   (rank 1: ssh w1 docker logs -f dsv41-1017-tf)   (rank 2: ssh w2 docker logs -f dsv41-1017-tf)   (rank 3: ssh w3 docker logs -f dsv41-1017-tf)\n    Restart  ./start.sh restart\n    Stop     ./stop.sh\n68 failed, 4 passed in 29.88s\n"
+ },
+ "verdict": "confirmed"
+}
