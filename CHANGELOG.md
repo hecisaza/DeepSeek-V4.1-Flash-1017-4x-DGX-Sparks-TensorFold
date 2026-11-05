@@ -1,5 +1,23 @@
 # Changelog
 
+- **2026-11-04** -- `0053` (Hector, [hecisaza](https://github.com/hecisaza)): a tool-call block (`<tool_call>`,
+  `<|tool_call>` or `<x:tool_call>`) whose payload opens with a DSML opener but is shorter than that opener and its
+  closer together made the parser cut both from it, a slice past the payload's start. A safety-checked build panics
+  there; the served build has no such checks and reads out of bounds. Such a payload now reads as no DSML block, and
+  the block is handled as any other tool-call block that is not a call: no call; a whole reply with no call limit keeps
+  it as text, a one-call reply drops it, and a stream shows it as the stream filter does. Every payload long enough to
+  hold the opener and the closer parses exactly as before: the guard returns the same slice.
+- **2026-11-04** -- `0052` (Hector, [hecisaza](https://github.com/hecisaza)): a DSML tool call whose string value holds
+  the block's own closer (`</｜DSML｜ calls>`, as in a file about DSML) was cut at that closer: the call was dropped, and
+  a streamed reply showed what followed it as text, with `finish_reason: stop`, the symptom reported in
+  [#14](https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/issues/14) (ecohash-co). The
+  parser now also reads a DSML block (either spelling) past a closer that lies inside a parameter value, and keeps that
+  reading only when it returns strictly more calls after `max_calls`; otherwise the reply parses exactly as before. The
+  stream filter hides such a block until its own closer; a reply that ends inside a block falls back to the first
+  closer, as before. With a chat template that writes DSML calls, the live streamer no longer sends `<tool_call>`
+  markup as calls (it could send a quoted one and drop the reply's DSML calls); a streaming client gets the parsed
+  calls, as a non-streaming one does. `tests/repro-issue-14.sh` forces such calls (`guided_regex`, greedy) and checks
+  the streamed and whole replies. `TOP_P` is unchanged.
 - **2026-11-02** -- `tools/claims/`: three scripts that check a patch's promise against a running server, written by
   Hector Isaza ([hecisaza](https://github.com/hecisaza)) with the verify step of
   [inference-agent-kit](https://github.com/hecisaza/inference-agent-kit): `0042`'s JSON answers, `0043`'s orphan DSML
