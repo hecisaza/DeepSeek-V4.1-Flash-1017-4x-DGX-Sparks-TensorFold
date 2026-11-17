@@ -45,7 +45,7 @@ jobs:
     env:
       KIT: /root/inference-agent-kit
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      LIVE_API: http://192.168.1.123:8888/v1
+      LIVE_API: http://192.168.1.197:8888/v1
       LIVE_MODEL: DeepSeek-V4.1-Flash-1017
       ISSUE: ${{ inputs.issue || github.event.issue.number }}
       MODE: ${{ inputs.mode || 'full' }}

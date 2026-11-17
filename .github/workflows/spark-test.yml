@@ -146,13 +146,13 @@ jobs:
           # the base (main without the PR) is the control; both checkouts get the lab's local.sh as the lab runs it (its
           # engine switches included, so the cut-in suite measures admission); a defaults variant without TF_* lines is
           # used for a second run when the PR changes a default
-          ssh -o BatchMode=yes hisaza@192.168.1.123 "cat ~/ds41-4x/scripts/local.sh" > local.lab.sh
+          ssh -o BatchMode=yes hisaza@192.168.1.197 "cat ~/ds41-4x/scripts/local.sh" > local.lab.sh
           grep -vE '^[[:space:]]*(export[[:space:]]+)?TF_' local.lab.sh > local.defaults.sh
           for pair in "./:ds41-pr" "../base/:ds41-base"; do
             src=${pair%%:*}; dir=${pair##*:}
             rsync -a --delete --exclude .git "$src" hisaza@192.168.1.161:$dir/
-            rsync -a --delete --exclude .git "$src" hisaza@192.168.1.123:$dir/
-            scp -q local.lab.sh hisaza@192.168.1.123:$dir/scripts/local.sh
+            rsync -a --delete --exclude .git "$src" hisaza@192.168.1.197:$dir/
+            scp -q local.lab.sh hisaza@192.168.1.197:$dir/scripts/local.sh
           done
           sed "s#__PR_IMAGE__#$IMAGE#; s#__BASE_IMAGE__#$BASE_IMAGE#" "$KIT/lab.pipeline.yaml" > lab.run.yaml
           "$KIT/scripts/pairtest" build --lab lab.run.yaml --target base
@@ -180,10 +180,10 @@ jobs:
           [ -z "$R" ] || cp "$R" "runs/$RUN/executed-script.sh"
           if [ "$DEFAULTS_RUN" = 1 ]; then
             # the PR changes an engine default: the same pair once more on defaults (no lab switches on either side)
-            for dir in ds41-pr ds41-base; do scp -q local.defaults.sh hisaza@192.168.1.123:$dir/scripts/local.sh; done
+            for dir in ds41-pr ds41-base; do scp -q local.defaults.sh hisaza@192.168.1.197:$dir/scripts/local.sh; done
             "$KIT/scripts/pairtest" run --lab lab.run.yaml --target pr --compare base --suite "$S" --runs runs --opt "reps=$REPS" --opt conditions=defaults "${OPTS[@]}" || rc=$?
             RUN2=$(ls -t runs | head -1); [ "$RUN2" != "$RUN" ] && { echo "RUN2=$RUN2" >> "$GITHUB_ENV"; python3 -c "import json,sys; m=json.load(open('run-manifest.json')); m['switches']='defaults'; json.dump(m, open(sys.argv[1],'w'), indent=1)" "runs/$RUN2/run-manifest.json"; [ -z "$R" ] || cp "$R" "runs/$RUN2/executed-script.sh"; }
-            for dir in ds41-pr ds41-base; do scp -q local.lab.sh hisaza@192.168.1.123:$dir/scripts/local.sh; done
+            for dir in ds41-pr ds41-base; do scp -q local.lab.sh hisaza@192.168.1.197:$dir/scripts/local.sh; done
           fi
           exit $rc
 
@@ -299,7 +299,7 @@ jobs:
       - name: Remove older PR and base images from the Sparks
         if: always()
         run: |
-          for h in 192.168.1.123 192.168.1.161 192.168.1.197 192.168.1.113; do
+          for h in 192.168.1.197 192.168.1.161 192.168.1.126 192.168.1.113; do
             ssh -o BatchMode=yes hisaza@$h "docker images --format '{{.Repository}}:{{.Tag}}' | grep -E '^tensorfold-dsv41:(pr|base)-' | grep -vE \"^($IMAGE|$BASE_IMAGE)\$\" | xargs -r docker image rm -f >/dev/null 2>&1 || true"
           done
 
@@ -314,7 +314,7 @@ jobs:
       KIT: /root/inference-agent-kit
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       THIS_REPO: ${{ github.repository }}
-      LIVE_API: http://192.168.1.123:8888/v1
+      LIVE_API: http://192.168.1.197:8888/v1
       LIVE_MODEL: DeepSeek-V4.1-Flash-1017
       PR_URL: ${{ needs.test.outputs.pr_url }}
       PR_REPO: ${{ needs.test.outputs.pr_repo }}
