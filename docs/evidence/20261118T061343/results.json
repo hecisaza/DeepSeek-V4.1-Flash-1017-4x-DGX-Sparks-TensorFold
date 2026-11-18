@@ -1,0 +1,1094 @@
+{
+ "meta": {
+  "targets_order": [
+   "pr",
+   "base"
+  ],
+  "candidate": "pr",
+  "control": "base",
+  "suites": [
+   "smoke",
+   "boundary",
+   "cutin",
+   "perf",
+   "soak",
+   "concurrency"
+  ],
+  "opts": {
+   "reps": "1",
+   "conditions": "defaults"
+  },
+  "started": "2026-11-18T06:13:43",
+  "kit": "2825d9f",
+  "fabric": "ring",
+  "conditions": "defaults",
+  "order": "A then B, one repetition (no reverse order: pass --opt reps=2 for a counterbalanced run)",
+  "targets": {
+   "pr": {
+    "backend": "recipe-docker",
+    "image": "tensorfold-dsv41:pr-d6b62cf3",
+    "artifact": null,
+    "model": "DeepSeek-V4.1-Flash-1017",
+    "chunk": 2048,
+    "env": {},
+    "artifact_id": "c19b9fa52529"
+   },
+   "base": {
+    "backend": "recipe-docker",
+    "image": "tensorfold-dsv41:base-d24e79ee",
+    "artifact": null,
+    "model": "DeepSeek-V4.1-Flash-1017",
+    "chunk": 2048,
+    "env": {},
+    "artifact_id": "5a94966d9621"
+   }
+  },
+  "restore": "live restored (verified: API answers, running artifact is live's)"
+ },
+ "smoke": {
+  "pr": [
+   {
+    "ok": true,
+    "checks": {
+     "arithmetic": true,
+     "greedy_repeat_equal": true,
+     "stream_matches": true,
+     "json_mode": true
+    },
+    "ttft_stream_s": 0.099,
+    "errors": [],
+    "probe": {
+     "head": {
+      "gpus": [
+       "0, NVIDIA GB10, 2444 MHz, 54, [N/A], [N/A], 0 %"
+      ],
+      "load": "load average: 8.19, 6.41, 5.63",
+      "container": "90 pids 3.047GiB / 121.7GiB",
+      "mem_available_mb": "28124"
+     }
+    }
+   }
+  ],
+  "base": [
+   {
+    "ok": true,
+    "checks": {
+     "arithmetic": true,
+     "greedy_repeat_equal": true,
+     "stream_matches": true,
+     "json_mode": true
+    },
+    "ttft_stream_s": 0.102,
+    "errors": [],
+    "probe": {
+     "head": {
+      "gpus": [
+       "0, NVIDIA GB10, 2463 MHz, 58, [N/A], [N/A], 0 %"
+      ],
+      "load": "load average: 7.39, 5.63, 5.58",
+      "container": "90 pids 3.04GiB / 121.7GiB",
+      "mem_available_mb": "28032"
+     }
+    }
+   }
+  ]
+ },
+ "boundary": {
+  "pr": [
+   {
+    "ok": true,
+    "hashes": [
+     [
+      "len5",
+      5,
+      "38127fef0fbb",
+      null
+     ],
+     [
+      "len2047",
+      2047,
+      "8488ccfbcf35",
+      null
+     ],
+     [
+      "len2048",
+      2048,
+      "c5ac2fb76516",
+      null
+     ],
+     [
+      "len2049",
+      2049,
+      "6766401c9caa",
+      null
+     ],
+     [
+      "len4095",
+      4095,
+      "ed9e5086f520",
+      null
+     ],
+     [
+      "len4096",
+      4096,
+      "52584e31f990",
+      null
+     ],
+     [
+      "len4097",
+      4097,
+      "1a71db317ee7",
+      null
+     ],
+     [
+      "len6143",
+      6143,
+      "2f9626e9baf5",
+      null
+     ],
+     [
+      "len6144",
+      6144,
+      "11933f2d4bd7",
+      null
+     ],
+     [
+      "len6145",
+      6145,
+      "7aa2f63b2547",
+      null
+     ],
+     [
+      "len8193",
+      8193,
+      "2ef3dc011922",
+      null
+     ],
+     [
+      "len12289",
+      12289,
+      "4fcfbd64881f",
+      null
+     ],
+     [
+      "pfx_base",
+      5124,
+      "52afe4842e5d",
+      null
+     ],
+     [
+      "pfx_div3072",
+      3376,
+      "64d23fe171dc",
+      null
+     ],
+     [
+      "pfx_div2044",
+      2348,
+      "16db99ba02f2",
+      null
+     ],
+     [
+      "pfx_div4092",
+      4396,
+      "63798c5ba36c",
+      null
+     ],
+     [
+      "pfx_div4093",
+      4397,
+      "6b1cfc31884d",
+      null
+     ],
+     [
+      "pfx_base_again",
+      5124,
+      "52afe4842e5d",
+      null
+     ],
+     [
+      "pfx_extend",
+      6660,
+      "357a869fef18",
+      null
+     ]
+    ],
+    "errors": [],
+    "probe": {
+     "head": {
+      "gpus": [
+       "0, NVIDIA GB10, 2411 MHz, 63, [N/A], [N/A], 0 %"
+      ],
+      "load": "load average: 7.64, 6.59, 5.75",
+      "container": "90 pids 3.204GiB / 121.7GiB",
+      "mem_available_mb": "27934"
+     }
+    }
+   }
+  ],
+  "base": [
+   {
+    "ok": true,
+    "hashes": [
+     [
+      "len5",
+      5,
+      "38127fef0fbb",
+      null
+     ],
+     [
+      "len2047",
+      2047,
+      "8488ccfbcf35",
+      null
+     ],
+     [
+      "len2048",
+      2048,
+      "c5ac2fb76516",
+      null
+     ],
+     [
+      "len2049",
+      2049,
+      "6766401c9caa",
+      null
+     ],
+     [
+      "len4095",
+      4095,
+      "ed9e5086f520",
+      null
+     ],
+     [
+      "len4096",
+      4096,
+      "52584e31f990",
+      null
+     ],
+     [
+      "len4097",
+      4097,
+      "1a71db317ee7",
+      null
+     ],
+     [
+      "len6143",
+      6143,
+      "2f9626e9baf5",
+      null
+     ],
+     [
+      "len6144",
+      6144,
+      "11933f2d4bd7",
+      null
+     ],
+     [
+      "len6145",
+      6145,
+      "7aa2f63b2547",
+      null
+     ],
+     [
+      "len8193",
+      8193,
+      "2ef3dc011922",
+      null
+     ],
+     [
+      "len12289",
+      12289,
+      "4fcfbd64881f",
+      null
+     ],
+     [
+      "pfx_base",
+      5124,
+      "52afe4842e5d",
+      null
+     ],
+     [
+      "pfx_div3072",
+      3376,
+      "64d23fe171dc",
+      null
+     ],
+     [
+      "pfx_div2044",
+      2348,
+      "16db99ba02f2",
+      null
+     ],
+     [
+      "pfx_div4092",
+      4396,
+      "63798c5ba36c",
+      null
+     ],
+     [
+      "pfx_div4093",
+      4397,
+      "6b1cfc31884d",
+      null
+     ],
+     [
+      "pfx_base_again",
+      5124,
+      "52afe4842e5d",
+      null
+     ],
+     [
+      "pfx_extend",
+      6660,
+      "357a869fef18",
+      null
+     ]
+    ],
+    "errors": [],
+    "probe": {
+     "head": {
+      "gpus": [
+       "0, NVIDIA GB10, 2392 MHz, 65, [N/A], [N/A], 0 %"
+      ],
+      "load": "load average: 6.67, 5.80, 5.64",
+      "container": "90 pids 3.196GiB / 121.7GiB",
+      "mem_available_mb": "27822"
+     }
+    }
+   }
+  ]
+ },
+ "cutin": {
+  "pr": [
+   {
+    "ok": true,
+    "rounds": [
+     {
+      "long": 44.135,
+      "short": 41.444,
+      "admitted": true
+     },
+     {
+      "long": 44.205,
+      "short": 41.511,
+      "admitted": true
+     },
+     {
+      "long": 44.075,
+      "short": 41.356,
+      "admitted": true
+     }
+    ],
+    "errors": [],
+    "probe": {
+     "head": {
+      "gpus": [
+       "0, NVIDIA GB10, 2405 MHz, 67, [N/A], [N/A], 16 %"
+      ],
+      "load": "load average: 7.07, 6.75, 5.92",
+      "container": "90 pids 3.256GiB / 121.7GiB",
+      "mem_available_mb": "27833"
+     }
+    }
+   }
+  ],
+  "base": [
+   {
+    "ok": true,
+    "rounds": [
+     {
+      "long": 44.322,
+      "short": 41.638,
+      "admitted": true
+     },
+     {
+      "long": 44.359,
+      "short": 41.675,
+      "admitted": true
+     },
+     {
+      "long": 44.19,
+      "short": 41.474,
+      "admitted": true
+     }
+    ],
+    "errors": [],
+    "probe": {
+     "head": {
+      "gpus": [
+       "0, NVIDIA GB10, 2392 MHz, 67, [N/A], [N/A], 20 %"
+      ],
+      "load": "load average: 6.96, 6.23, 5.82",
+      "container": "90 pids 3.249GiB / 121.7GiB",
+      "mem_available_mb": "27696"
+     }
+    }
+   }
+  ]
+ },
+ "perf": {
+  "pr": [
+   {
+    "ok": true,
+    "decode_tps": [
+     57.9,
+     54.8,
+     58.0
+    ],
+    "prefill_tps": [
+     1400.4,
+     1402.8,
+     1408.8
+    ],
+    "batch_tps": [
+     118.6,
+     117.5,
+     110.2
+    ],
+    "decode_keys": [
+     "0:b4f368926e94",
+     "1:57f79aed8dff",
+     "2:8221184cc4e0"
+    ],
+    "prefill_keys": [
+     "0:1d31ced8d104",
+     "1:eb7344ee252d",
+     "2:709ac335076e"
+    ],
+    "batch_keys": [
+     "0:a9a103f5331c",
+     "1:96264efac35c",
+     "2:8abe71c6676c"
+    ],
+    "prompt_tokens": 12004,
+    "streams": 4,
+    "errors": [],
+    "probe": {
+     "head": {
+      "gpus": [
+       "0, NVIDIA GB10, 2411 MHz, 66, [N/A], [N/A], 0 %"
+      ],
+      "load": "load average: 5.84, 6.44, 5.86",
+      "container": "90 pids 3.452GiB / 121.7GiB",
+      "mem_available_mb": "27497"
+     }
+    }
+   }
+  ],
+  "base": [
+   {
+    "ok": true,
+    "decode_tps": [
+     58.9,
+     55.2,
+     57.8
+    ],
+    "prefill_tps": [
+     1400.0,
+     1396.5,
+     1397.4
+    ],
+    "batch_tps": [
+     117.6,
+     119.1,
+     110.3
+    ],
+    "decode_keys": [
+     "0:b4f368926e94",
+     "1:57f79aed8dff",
+     "2:8221184cc4e0"
+    ],
+    "prefill_keys": [
+     "0:1d31ced8d104",
+     "1:eb7344ee252d",
+     "2:709ac335076e"
+    ],
+    "batch_keys": [
+     "0:a9a103f5331c",
+     "1:96264efac35c",
+     "2:8abe71c6676c"
+    ],
+    "prompt_tokens": 12004,
+    "streams": 4,
+    "errors": [],
+    "probe": {
+     "head": {
+      "gpus": [
+       "0, NVIDIA GB10, 2437 MHz, 66, [N/A], [N/A], 6 %"
+      ],
+      "load": "load average: 6.00, 6.08, 5.80",
+      "container": "90 pids 3.432GiB / 121.7GiB",
+      "mem_available_mb": "27408"
+     }
+    }
+   }
+  ]
+ },
+ "soak": {
+  "pr": [
+   {
+    "ok": true,
+    "counts": {
+     "ok": 148,
+     "abort": 111,
+     "err": 0,
+     "canary": 49,
+     "canary_bad": 0
+    },
+    "errors": [],
+    "samples": [
+     {
+      "head": {
+       "gpus": [
+        "0, NVIDIA GB10, 2470 MHz, 65, [N/A], [N/A], 79 %"
+       ],
+       "load": "load average: 5.37, 6.33, 5.83",
+       "container": "94 pids 3.481GiB / 121.7GiB",
+       "mem_available_mb": "27451"
+      }
+     },
+     {
+      "head": {
+       "gpus": [
+        "0, NVIDIA GB10, 2489 MHz, 71, [N/A], [N/A], 96 %"
+       ],
+       "load": "load average: 5.61, 6.21, 5.82",
+       "container": "93 pids 3.618GiB / 121.7GiB",
+       "mem_available_mb": "27196"
+      }
+     },
+     {
+      "head": {
+       "gpus": [
+        "0, NVIDIA GB10, 2489 MHz, 68, [N/A], [N/A], 96 %"
+       ],
+       "load": "load average: 6.02, 6.21, 5.85",
+       "container": "94 pids 3.643GiB / 121.7GiB",
+       "mem_available_mb": "27108"
+      }
+     },
+     {
+      "head": {
+       "gpus": [
+        "0, NVIDIA GB10, 2489 MHz, 68, [N/A], [N/A], 96 %"
+       ],
+       "load": "load average: 5.93, 6.16, 5.86",
+       "container": "93 pids 3.682GiB / 121.7GiB",
+       "mem_available_mb": "27001"
+      }
+     },
+     {
+      "head": {
+       "gpus": [
+        "0, NVIDIA GB10, 2489 MHz, 69, [N/A], [N/A], 96 %"
+       ],
+       "load": "load average: 5.84, 6.08, 5.85",
+       "container": "93 pids 3.723GiB / 121.7GiB",
+       "mem_available_mb": "26838"
+      }
+     },
+     {
+      "head": {
+       "gpus": [
+        "0, NVIDIA GB10, 2483 MHz, 70, [N/A], [N/A], 93 %"
+       ],
+       "load": "load average: 6.01, 6.08, 5.87",
+       "container": "93 pids 3.752GiB / 121.7GiB",
+       "mem_available_mb": "26719"
+      }
+     },
+     {
+      "head": {
+       "gpus": [
+        "0, NVIDIA GB10, 2476 MHz, 68, [N/A], [N/A], 96 %"
+       ],
+       "load": "load average: 6.00, 6.08, 5.88",
+       "container": "95 pids 3.782GiB / 121.7GiB",
+       "mem_available_mb": "26634"
+      }
+     },
+     {
+      "head": {
+       "gpus": [
+        "0, NVIDIA GB10, 2476 MHz, 67, [N/A], [N/A], 91 %"
+       ],
+       "load": "load average: 5.97, 6.05, 5.89",
+       "container": "94 pids 3.785GiB / 121.7GiB",
+       "mem_available_mb": "26568"
+      }
+     },
+     {
+      "head": {
+       "gpus": [
+        "0, NVIDIA GB10, 2489 MHz, 70, [N/A], [N/A], 96 %"
+       ],
+       "load": "load average: 5.73, 5.93, 5.85",
+       "container": "93 pids 3.81GiB / 121.7GiB",
+       "mem_available_mb": "27394"
+      }
+     },
+     {
+      "head": {
+       "gpus": [
+        "0, NVIDIA GB10, 2489 MHz, 69, [N/A], [N/A], 96 %"
+       ],
+       "load": "load average: 5.77, 5.91, 5.85",
+       "container": "93 pids 3.771GiB / 121.7GiB",
+       "mem_available_mb": "27450"
+      }
+     }
+    ],
+    "probe": {
+     "head": {
+      "gpus": [
+       "0, NVIDIA GB10, 2411 MHz, 58, [N/A], [N/A], 0 %"
+      ],
+      "load": "load average: 4.03, 5.49, 5.72",
+      "container": "90 pids 3.801GiB / 121.7GiB",
+      "mem_available_mb": "27378"
+     }
+    }
+   }
+  ],
+  "base": [
+   {
+    "ok": true,
+    "counts": {
+     "ok": 143,
+     "abort": 108,
+     "err": 0,
+     "canary": 48,
+     "canary_bad": 0
+    },
+    "errors": [],
+    "samples": [
+     {
+      "head": {
+       "gpus": [
+        "0, NVIDIA GB10, 2483 MHz, 65, [N/A], [N/A], 96 %"
+       ],
+       "load": "load average: 5.84, 6.05, 5.79",
+       "container": "94 pids 3.459GiB / 121.7GiB",
+       "mem_available_mb": "27336"
+      }
+     },
+     {
+      "head": {
+       "gpus": [
+        "0, NVIDIA GB10, 2489 MHz, 70, [N/A], [N/A], 96 %"
+       ],
+       "load": "load average: 5.30, 5.85, 5.74",
+       "container": "93 pids 3.634GiB / 121.7GiB",
+       "mem_available_mb": "27033"
+      }
+     },
+     {
+      "head": {
+       "gpus": [
+        "0, NVIDIA GB10, 2483 MHz, 70, [N/A], [N/A], 95 %"
+       ],
+       "load": "load average: 5.81, 5.89, 5.76",
+       "container": "93 pids 3.696GiB / 121.7GiB",
+       "mem_available_mb": "26777"
+      }
+     },
+     {
+      "head": {
+       "gpus": [
+        "0, NVIDIA GB10, 2470 MHz, 67, [N/A], [N/A], 76 %"
+       ],
+       "load": "load average: 5.72, 5.85, 5.75",
+       "container": "94 pids 3.729GiB / 121.7GiB",
+       "mem_available_mb": "26741"
+      }
+     },
+     {
+      "head": {
+       "gpus": [
+        "0, NVIDIA GB10, 2489 MHz, 67, [N/A], [N/A], 96 %"
+       ],
+       "load": "load average: 5.68, 5.82, 5.75",
+       "container": "94 pids 3.73GiB / 121.7GiB",
+       "mem_available_mb": "26644"
+      }
+     },
+     {
+      "head": {
+       "gpus": [
+        "0, NVIDIA GB10, 2489 MHz, 72, [N/A], [N/A], 96 %"
+       ],
+       "load": "load average: 5.99, 5.87, 5.77",
+       "container": "96 pids 3.845GiB / 121.7GiB",
+       "mem_available_mb": "26469"
+      }
+     },
+     {
+      "head": {
+       "gpus": [
+        "0, NVIDIA GB10, 2483 MHz, 71, [N/A], [N/A], 96 %"
+       ],
+       "load": "load average: 6.24, 5.96, 5.81",
+       "container": "93 pids 3.751GiB / 121.7GiB",
+       "mem_available_mb": "26601"
+      }
+     },
+     {
+      "head": {
+       "gpus": [
+        "0, NVIDIA GB10, 2489 MHz, 68, [N/A], [N/A], 96 %"
+       ],
+       "load": "load average: 6.05, 5.94, 5.81",
+       "container": "93 pids 3.748GiB / 121.7GiB",
+       "mem_available_mb": "26921"
+      }
+     },
+     {
+      "head": {
+       "gpus": [
+        "0, NVIDIA GB10, 2489 MHz, 69, [N/A], [N/A], 96 %"
+       ],
+       "load": "load average: 5.67, 5.84, 5.79",
+       "container": "93 pids 3.763GiB / 121.7GiB",
+       "mem_available_mb": "26460"
+      }
+     },
+     {
+      "head": {
+       "gpus": [
+        "0, NVIDIA GB10, 2476 MHz, 66, [N/A], [N/A], 96 %"
+       ],
+       "load": "load average: 5.80, 5.85, 5.80",
+       "container": "93 pids 3.784GiB / 121.7GiB",
+       "mem_available_mb": "26458"
+      }
+     }
+    ],
+    "probe": {
+     "head": {
+      "gpus": [
+       "0, NVIDIA GB10, 2411 MHz, 58, [N/A], [N/A], 0 %"
+      ],
+      "load": "load average: 4.17, 5.47, 5.68",
+      "container": "90 pids 3.743GiB / 121.7GiB",
+      "mem_available_mb": "26569"
+     }
+    }
+   }
+  ]
+ },
+ "concurrency": {
+  "pr": [
+   {
+    "ok": true,
+    "stages": [
+     {
+      "round": 0,
+      "streams": 1,
+      "aggregate_tps": 51.7,
+      "ttft_p50": 0.401,
+      "ttft_p95": 0.464,
+      "requests": 16,
+      "batched_vs_serial": null
+     },
+     {
+      "round": 0,
+      "streams": 4,
+      "aggregate_tps": 82.3,
+      "ttft_p50": 1.165,
+      "ttft_p95": 1.601,
+      "requests": 16,
+      "batched_vs_serial": {
+       "compared": 16,
+       "mismatch": 0
+      }
+     },
+     {
+      "round": 0,
+      "streams": 8,
+      "aggregate_tps": 91.5,
+      "ttft_p50": 1.993,
+      "ttft_p95": 3.144,
+      "requests": 16,
+      "batched_vs_serial": {
+       "compared": 16,
+       "mismatch": 0
+      }
+     },
+     {
+      "round": 0,
+      "streams": 16,
+      "aggregate_tps": 94.4,
+      "ttft_p50": 3.549,
+      "ttft_p95": 6.26,
+      "requests": 16,
+      "batched_vs_serial": {
+       "compared": 16,
+       "mismatch": 0
+      }
+     },
+     {
+      "round": 1,
+      "streams": 1,
+      "aggregate_tps": 38.8,
+      "ttft_p50": 0.398,
+      "ttft_p95": 6.947,
+      "requests": 16,
+      "batched_vs_serial": null
+     },
+     {
+      "round": 1,
+      "streams": 4,
+      "aggregate_tps": 82.1,
+      "ttft_p50": 1.164,
+      "ttft_p95": 1.597,
+      "requests": 16,
+      "batched_vs_serial": {
+       "compared": 16,
+       "mismatch": 0
+      }
+     },
+     {
+      "round": 1,
+      "streams": 8,
+      "aggregate_tps": 91.7,
+      "ttft_p50": 1.943,
+      "ttft_p95": 3.127,
+      "requests": 16,
+      "batched_vs_serial": {
+       "compared": 16,
+       "mismatch": 0
+      }
+     },
+     {
+      "round": 1,
+      "streams": 16,
+      "aggregate_tps": 95.0,
+      "ttft_p50": 3.473,
+      "ttft_p95": 6.131,
+      "requests": 16,
+      "batched_vs_serial": {
+       "compared": 16,
+       "mismatch": 0
+      }
+     }
+    ],
+    "determinism": {
+     "compared": 96,
+     "mismatch": 0
+    },
+    "memory": {
+     "spark-161": {
+      "before_mb": 2844.7,
+      "after_drain_mb": 2940.9,
+      "growth_mb": 96.2,
+      "growth_mb_per_1000_requests": 751.6,
+      "fds_before": 147,
+      "fds_after": 150
+     },
+     "spark-197": {
+      "before_mb": 4156.4,
+      "after_drain_mb": 4250.6,
+      "growth_mb": 94.2,
+      "growth_mb_per_1000_requests": 735.9,
+      "fds_before": 221,
+      "fds_after": 221
+     },
+     "gx10-126": {
+      "before_mb": 2855.9,
+      "after_drain_mb": 2952.2,
+      "growth_mb": 96.3,
+      "growth_mb_per_1000_requests": 752.3,
+      "fds_before": 150,
+      "fds_after": 150
+     },
+     "dell-113": {
+      "before_mb": 2901.0,
+      "after_drain_mb": 2997.2,
+      "growth_mb": 96.2,
+      "growth_mb_per_1000_requests": 751.6,
+      "fds_before": 150,
+      "fds_after": 150
+     }
+    },
+    "requests": 128,
+    "errors": [],
+    "probe": {
+     "head": {
+      "gpus": [
+       "0, NVIDIA GB10, 2411 MHz, 56, [N/A], [N/A], 0 %"
+      ],
+      "load": "load average: 2.52, 4.36, 5.21",
+      "container": "90 pids 4.151GiB / 121.7GiB",
+      "mem_available_mb": "25881"
+     }
+    }
+   }
+  ],
+  "base": [
+   {
+    "ok": true,
+    "stages": [
+     {
+      "round": 0,
+      "streams": 1,
+      "aggregate_tps": 52.3,
+      "ttft_p50": 0.385,
+      "ttft_p95": 0.415,
+      "requests": 16,
+      "batched_vs_serial": null
+     },
+     {
+      "round": 0,
+      "streams": 4,
+      "aggregate_tps": 83.3,
+      "ttft_p50": 1.12,
+      "ttft_p95": 1.557,
+      "requests": 16,
+      "batched_vs_serial": {
+       "compared": 16,
+       "mismatch": 0
+      }
+     },
+     {
+      "round": 0,
+      "streams": 8,
+      "aggregate_tps": 92.4,
+      "ttft_p50": 1.88,
+      "ttft_p95": 3.055,
+      "requests": 16,
+      "batched_vs_serial": {
+       "compared": 16,
+       "mismatch": 0
+      }
+     },
+     {
+      "round": 0,
+      "streams": 16,
+      "aggregate_tps": 95.7,
+      "ttft_p50": 3.391,
+      "ttft_p95": 6.07,
+      "requests": 16,
+      "batched_vs_serial": {
+       "compared": 16,
+       "mismatch": 0
+      }
+     },
+     {
+      "round": 1,
+      "streams": 1,
+      "aggregate_tps": 51.9,
+      "ttft_p50": 0.386,
+      "ttft_p95": 0.409,
+      "requests": 16,
+      "batched_vs_serial": null
+     },
+     {
+      "round": 1,
+      "streams": 4,
+      "aggregate_tps": 82.9,
+      "ttft_p50": 1.131,
+      "ttft_p95": 1.547,
+      "requests": 16,
+      "batched_vs_serial": {
+       "compared": 16,
+       "mismatch": 0
+      }
+     },
+     {
+      "round": 1,
+      "streams": 8,
+      "aggregate_tps": 92.3,
+      "ttft_p50": 1.877,
+      "ttft_p95": 3.062,
+      "requests": 16,
+      "batched_vs_serial": {
+       "compared": 16,
+       "mismatch": 0
+      }
+     },
+     {
+      "round": 1,
+      "streams": 16,
+      "aggregate_tps": 96.4,
+      "ttft_p50": 3.416,
+      "ttft_p95": 6.092,
+      "requests": 16,
+      "batched_vs_serial": {
+       "compared": 16,
+       "mismatch": 0
+      }
+     }
+    ],
+    "determinism": {
+     "compared": 96,
+     "mismatch": 0
+    },
+    "memory": {
+     "spark-161": {
+      "before_mb": 2820.1,
+      "after_drain_mb": 2907.1,
+      "growth_mb": 87.0,
+      "growth_mb_per_1000_requests": 679.7,
+      "fds_before": 150,
+      "fds_after": 150
+     },
+     "spark-197": {
+      "before_mb": 4121.6,
+      "after_drain_mb": 4207.6,
+      "growth_mb": 86.0,
+      "growth_mb_per_1000_requests": 671.9,
+      "fds_before": 221,
+      "fds_after": 221
+     },
+     "gx10-126": {
+      "before_mb": 2849.8,
+      "after_drain_mb": 2936.8,
+      "growth_mb": 87.0,
+      "growth_mb_per_1000_requests": 679.7,
+      "fds_before": 147,
+      "fds_after": 150
+     },
+     "dell-113": {
+      "before_mb": 2821.1,
+      "after_drain_mb": 2909.2,
+      "growth_mb": 88.1,
+      "growth_mb_per_1000_requests": 688.3,
+      "fds_before": 150,
+      "fds_after": 150
+     }
+    },
+    "requests": 128,
+    "errors": [],
+    "probe": {
+     "head": {
+      "gpus": [
+       "0, NVIDIA GB10, 2411 MHz, 56, [N/A], [N/A], 0 %"
+      ],
+      "load": "load average: 2.23, 4.28, 5.15",
+      "container": "90 pids 4.109GiB / 121.7GiB",
+      "mem_available_mb": "26875"
+     }
+    }
+   }
+  ]
+ },
+ "startup": {
+  "pr": [
+   {
+    "ok": true,
+    "seconds_per_start": [
+     98.0
+    ]
+   }
+  ],
+  "base": [
+   {
+    "ok": true,
+    "seconds_per_start": [
+     97.7
+    ]
+   }
+  ]
+ }
+}

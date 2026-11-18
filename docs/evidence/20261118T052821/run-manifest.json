@@ -1,0 +1,17 @@
+{
+ "pr_repo": "MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold",
+ "pr": 44,
+ "pr_url": "https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/44",
+ "pr_state": "open",
+ "pr_closed_at": "",
+ "head_sha": "d6b62cf3fb58d9e8498458cc4209bed352f64221",
+ "base_sha": "d24e79eef8052f1ac13fd2af0f3cba357eb4c280",
+ "candidate_sha": "d6b62cf3fb58d9e8498458cc4209bed352f64221",
+ "candidate_kind": "head against its merge-base d24e79ee (the PR does not merge cleanly onto the current base)",
+ "head_ref": "fix/engram-stray-files",
+ "base_ref": "main",
+ "switches": "lab",
+ "workflow_run": "44242023237",
+ "dispatched_by": "hecisaza",
+ "event": "workflow_dispatch"
+}
