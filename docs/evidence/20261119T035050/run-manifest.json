@@ -1,0 +1,17 @@
+{
+ "pr_repo": "MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold",
+ "pr": 53,
+ "pr_url": "https://github.com/MiaAI-Lab/DeepSeek-V4.1-Flash-1017-4x-DGX-Sparks-TensorFold/pull/53",
+ "pr_state": "open",
+ "pr_closed_at": "",
+ "head_sha": "01d2a8910575d2e23d00f290bec4b3dd00d760f8",
+ "base_sha": "8ffa67d53ef15bab997399135f85e8b0910f30be",
+ "candidate_sha": "1cac39ce4334c7bcaba6c1aae50bd87fa756739f",
+ "candidate_kind": "merged onto the current base",
+ "head_ref": "patches/0056-prefill-cancel-checkpoints",
+ "base_ref": "main",
+ "switches": "lab",
+ "workflow_run": "44452605533",
+ "dispatched_by": "hecisaza",
+ "event": "workflow_dispatch"
+}
